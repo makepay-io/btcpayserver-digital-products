@@ -1,0 +1,7 @@
+@model OrderViewModel
+@{ Layout = null; }
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="@((Model.Order.Status == DigitalOrderStatus.Pending) ? "10" : "")"><title>Your order</title><style>body{margin:0;background:#f5f7fb;color:#152033;font:16px/1.5 system-ui,sans-serif}.box{max-width:620px;margin:10vh auto;background:#fff;border-radius:22px;padding:42px;box-shadow:0 18px 60px #1725541a;text-align:center}.btn{display:inline-block;background:@Model.Settings.AccentColor;color:#fff;text-decoration:none;border-radius:12px;padding:14px 22px;font-weight:750}.muted{color:#64748b}</style></head><body><main class="box"><h1>@Model.Product.Name</h1>
+@if(Model.Order.Status == DigitalOrderStatus.Paid && Model.DownloadUrl is not null){<p>Payment received. Your protected download is ready.</p><p><a class="btn" href="@Model.DownloadUrl">Download file</a></p><p class="muted">@Model.Order.DownloadCount of @Model.Order.MaxDownloads downloads used. Link expires @Model.Order.ExpiresAt?.ToString("u").</p>}
+else if(Model.Order.Status == DigitalOrderStatus.Revoked){<p>This download has been revoked. Contact the merchant if you need help.</p>}
+else {<p>We are waiting for payment confirmation. This page refreshes automatically.</p><p class="muted">Order @Model.Order.Id[..8]</p>}
+@if(Model.Settings.ShowMakePayPromotion){<p class="muted">@Model.Settings.PromotionText</p>}</main></body></html>

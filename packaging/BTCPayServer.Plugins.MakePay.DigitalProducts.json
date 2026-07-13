@@ -1,0 +1,12 @@
+{
+  "Identifier": "BTCPayServer.Plugins.MakePay.DigitalProducts",
+  "Name": "MakePay Digital Products",
+  "Version": "1.0.0.0",
+  "Description": "Protected download and license storefront with local, S3, URL delivery, license generation, activation, and signed verification APIs.",
+  "SystemPlugin": false,
+  "Dependencies": [{ "Identifier": "BTCPayServer", "Condition": ">=2.3.5" }],
+  "Documentation": "https://github.com/makepay-io/btcpayserver-digital-products",
+  "Source": "https://github.com/makepay-io/btcpayserver-digital-products",
+  "Author": "MakePay.io",
+  "AuthorLink": "https://makepay.io"
+}

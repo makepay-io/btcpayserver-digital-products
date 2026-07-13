@@ -1,0 +1,14 @@
+@using BTCPayServer.Abstractions.Contracts
+@using BTCPayServer.Client
+@inject IScopeProvider ScopeProvider
+@{
+    var storeId = ScopeProvider.GetCurrentStoreId();
+}
+@if (!string.IsNullOrEmpty(storeId))
+{
+    <li class="nav-item">
+        <a permission="@Policies.CanModifyStoreSettings" layout-menu-item="DigitalDownloads" asp-controller="DigitalDownloadsAdmin" asp-action="Index" asp-route-storeId="@storeId">
+            <span>Digital Products</span>
+        </a>
+    </li>
+}

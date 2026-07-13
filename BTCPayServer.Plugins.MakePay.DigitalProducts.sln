@@ -1,0 +1,24 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BTCPayServer.Plugins.MakePay.DigitalProducts", "src/BTCPayServer.Plugins.MakePay.DigitalProducts/BTCPayServer.Plugins.MakePay.DigitalProducts.csproj", "{418C21C6-48D6-4B99-AC15-B7C5C7F70D8B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BTCPayServer.Plugins.MakePay.DigitalProducts.Tests", "tests/BTCPayServer.Plugins.MakePay.DigitalProducts.Tests/BTCPayServer.Plugins.MakePay.DigitalProducts.Tests.csproj", "{ED6F7E4C-1E83-4DF5-A295-A395E55CE234}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{418C21C6-48D6-4B99-AC15-B7C5C7F70D8B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{418C21C6-48D6-4B99-AC15-B7C5C7F70D8B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{418C21C6-48D6-4B99-AC15-B7C5C7F70D8B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{418C21C6-48D6-4B99-AC15-B7C5C7F70D8B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{ED6F7E4C-1E83-4DF5-A295-A395E55CE234}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ED6F7E4C-1E83-4DF5-A295-A395E55CE234}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ED6F7E4C-1E83-4DF5-A295-A395E55CE234}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ED6F7E4C-1E83-4DF5-A295-A395E55CE234}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

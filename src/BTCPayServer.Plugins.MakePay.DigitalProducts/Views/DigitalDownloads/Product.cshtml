@@ -1,0 +1,22 @@
+@model DigitalProduct
+@{ var storeId = ViewData["StoreId"]?.ToString(); ViewData.SetActivePage("DigitalDownloads", "Digital Downloads", Model.Name); }
+<h2>@(Model.CreatedAt == default ? "New product" : Model.Name)</h2>
+<partial name="_StatusMessage" />
+<form method="post" enctype="multipart/form-data" asp-action="SaveProduct" asp-route-storeId="@storeId" asp-route-productId="@(Model.Id == "" ? "new" : Model.Id)">
+<div asp-validation-summary="All" class="text-danger"></div>
+<div class="row g-4"><div class="col-lg-7">
+<div class="form-group"><label asp-for="Name" class="form-label"></label><input asp-for="Name" class="form-control" /></div>
+<div class="form-group"><label asp-for="Slug" class="form-label"></label><input asp-for="Slug" class="form-control" /></div>
+<div class="form-group"><label asp-for="Description" class="form-label"></label><textarea asp-for="Description" rows="6" class="form-control"></textarea></div>
+<div class="row"><div class="col-md-5 form-group"><label asp-for="Price" class="form-label"></label><input asp-for="Price" class="form-control" /></div><div class="col-md-7 form-group"><label asp-for="ImageUrl" class="form-label">Cover image URL</label><input asp-for="ImageUrl" class="form-control" /></div></div>
+<div class="form-check"><input asp-for="Active" class="form-check-input" /><label asp-for="Active" class="form-check-label">Published</label></div>
+</div><div class="col-lg-5"><div class="bg-tile rounded p-4">
+<h4>Protected file source</h4>
+<div class="form-group"><label asp-for="StorageKind" class="form-label">Provider</label><select asp-for="StorageKind" asp-items="Html.GetEnumSelectList<ProductStorageKind>()" class="form-select"></select></div>
+<div class="form-group"><label class="form-label">Upload local file</label><input type="file" name="upload" class="form-control" /><div class="form-text">Uploading switches the provider to Local. Existing local files remain unchanged if empty.</div></div>
+<div class="form-group"><label asp-for="StorageLocation" class="form-label">S3 object key or custom URL</label><input asp-for="StorageLocation" class="form-control" /><div class="form-text">For S3 enter the object key. For Custom URL enter an absolute HTTP(S) URL.</div></div>
+<div class="form-group"><label asp-for="DownloadFileName" class="form-label">Customer filename</label><input asp-for="DownloadFileName" class="form-control" /></div>
+<div class="row"><div class="col"><label asp-for="DownloadLimit" class="form-label">Download limit</label><input asp-for="DownloadLimit" class="form-control" placeholder="Store default" /></div><div class="col"><label asp-for="LinkHours" class="form-label">Link hours</label><input asp-for="LinkHours" class="form-control" placeholder="Store default" /></div></div>
+</div></div></div>
+<div class="d-flex gap-2 mt-4"><button class="btn btn-primary" type="submit">Save product</button><a class="btn btn-secondary" asp-action="Index" asp-route-storeId="@storeId">Cancel</a></div>
+</form>
