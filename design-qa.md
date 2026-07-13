@@ -1,33 +1,27 @@
-# Design QA — Digital Products v1.1.1
+# Design QA — Digital Products 1.2.0
 
-## Evidence
+## Grounding
 
-- Reference: `/var/folders/70/d8rtf1ds5f14stgc4yv_4c600000gn/T/codex-clipboard-cf127f32-214d-4a3d-96d1-a74ca95cc58c.png`
-- Implementation: `.design-qa/storefront-v1.1.1-desktop-final.png`
-- Combined comparison: `.design-qa/reference-vs-implementation.png`
-- Desktop viewport: 1488 × 1058; public storefront; two published demo products.
-- Cart evidence: `.design-qa/cart-v1.1.1-desktop.png` and `.design-qa/cart-v1.1.1-mobile.png`.
+- Storefront direction: the approved modern ecommerce homepage screenshot supplied in this task.
+- Footer wordmark reference: `Screenshot 2026-07-13 at 6.36.30 PM.png`, showing the exact source-grounded `✦ MakePay` lockup.
+- Footer spacing defect: `Screenshot 2026-07-13 at 6.36.58 PM.png`, showing the oversized BTCPay container and undersized legacy MakePay icon that had to be removed.
+- Editor interaction reference: the supplied Canapes page-builder screens and the local page-builder implementation named by the user.
 
-## Visual comparison
+## Comparison and inspection
 
-- Matches the selected blue promotion strip, compact white navigation, wide soft-gray hero, product filters/cards, and structured navy footer.
-- Uses the merchant-configured wordmark, content, colors, and catalog data; configured logo, hero, and product images override the bundled defaults.
-- Added real generated hero/download/license artwork sized for the visible slots. No placeholder or CSS-drawn product artwork remains.
-- Refined the hero headline after side-by-side review to match the reference's compact two-line desktop scale.
-- The live catalog contains two products rather than the three shown in the reference, so the grid correctly leaves the remaining column empty instead of inventing catalog data.
+- Replaced the legacy boxed logo row with a single aligned flex row: BTCPay is constrained to 126 × 32 px and the MakePay wordmark uses the requested `✦ MakePay` lockup at a balanced 1.2 rem size.
+- Removed editable MakePay attribution controls from settings and from the live-editor inspector. The required copy and backlink are rendered independently of merchant settings.
+- Product images use `object-fit: contain` in cards and the detail view so thin source artwork is preserved instead of being cropped or softened by cover scaling.
+- Added a responsive product-detail composition with breadcrumbs, large contained product media, delivery metadata, quantity handling, related products, shared navigation, and the same enforced footer.
+- The editor now previews the product-detail page, preserves canvas/inspector scroll on selection changes, updates the iframe body in place, restores editor state, supports undo/redo, and removes duplicate stored category slugs from the editing surface.
+- Desktop, tablet, and mobile rules were checked for title wrapping, footer reflow, product columns, purchase controls, and minimum interactive target sizing.
 
-## Functional and responsive QA
+## Runtime verification
 
-- Verified live header, filters, account/cart navigation, CTA anchors, add-to-cart forms, footer links, and embedded artwork endpoints.
-- Added one download and one license, then verified the two-line cart at desktop width.
-- Confirmed quantity input, Update button, and total price occupy separate grid tracks with no overlap.
-- Confirmed DOM layout at 390px has no horizontal overflow (`scrollWidth === innerWidth`) for both storefront and cart.
-- Shared form overlay disables submit controls, marks the form busy, and blocks duplicate submits; `pageshow` safely restores controls.
-
-## Automated and deployment checks
-
-- Digital Products: 22/22 tests passed with Release Razor compilation.
-- Event Tickets: 11/11 tests passed with Release Razor compilation.
-- Live BTCPay logs loaded both plugins as version 1.1.1.0.
+- Plugin build: passed with zero errors.
+- Automated tests: 27 passed, 0 failed.
+- Deployed plugin startup: BTCPay loaded `BTCPayServer.Plugins.MakePay.DigitalProducts - 1.2.0.0` without plugin errors.
+- Public storefront HTTP render: 200; enforced MakePay wordmark and backlink present; editable attribution labels absent.
+- Public product-detail HTTP render: 200; add-to-cart, related products, balanced footer marks, and enforced backlink present.
 
 final result: passed

@@ -76,5 +76,127 @@ public sealed class StorefrontFlowTests
         Assert.Equal(107.99m, checkout.Total);
         Assert.Equal("USD", checkout.Currency);
         Assert.Equal("buyer@example.com", checkout.BuyerEmail);
+        Assert.Equal(["new-license", "new-product"], catalog.Select(product => product.Slug).OrderBy(slug => slug));
     }
+
+    [Fact]
+    public void Storefront_categories_hide_empty_and_disabled_entries()
+    {
+        var settings = new DigitalDownloadsSettings
+        {
+            StorefrontCategories =
+            [
+                new() { Id = "downloads", Name = "Downloads", Slug = "downloads", Rule = DigitalStoreCategoryRule.Downloads },
+                new() { Id = "licenses", Name = "Licenses", Slug = "licenses", Rule = DigitalStoreCategoryRule.Licenses },
+                new() { Id = "empty", Name = "Empty", Slug = "empty", Rule = DigitalStoreCategoryRule.Custom },
+                new() { Id = "hidden", Name = "Hidden", Slug = "hidden", Rule = DigitalStoreCategoryRule.Downloads, Visible = false }
+            ]
+        };
+
+        var categories = DigitalStorefrontBuilder.BuildCategories(settings, [Product(DigitalProductKind.Download, "guide")]);
+
+        var category = Assert.Single(categories);
+        Assert.Equal("downloads", category.Slug);
+    }
+
+    [Fact]
+    public void Custom_category_filters_only_selected_products()
+    {
+        var guide = Product(DigitalProductKind.Download, "guide");
+        var pro = Product(DigitalProductKind.License, "pro");
+        var settings = new DigitalDownloadsSettings
+        {
+            StorefrontCategories =
+            [
+                new()
+                {
+                    Id = "featured",
+                    Name = "Featured",
+                    Slug = "featured",
+                    ProductReferences = [DigitalStorefrontBuilder.ProductReference(pro)]
+                }
+            ]
+        };
+
+        var category = Assert.Single(DigitalStorefrontBuilder.BuildCategories(settings, [guide, pro]));
+        var product = Assert.Single(DigitalStorefrontBuilder.FilterCatalog([guide, pro], category));
+        Assert.Equal("pro", product.Id);
+    }
+
+    [Fact]
+    public void Hero_product_attachment_uses_catalog_anchor_and_safe_fallbacks()
+    {
+        var product = Product(DigitalProductKind.License, "pro");
+        var settings = new DigitalDownloadsSettings
+        {
+            HeroSlides =
+            [
+                new()
+                {
+                    Id = "hero",
+                    Headline = "Pro",
+                    ImageUrl = "javascript:alert(1)",
+                    LinkUrl = "javascript:alert(1)",
+                    ProductReference = DigitalStorefrontBuilder.ProductReference(product)
+                }
+            ]
+        };
+
+        var slide = Assert.Single(DigitalStorefrontBuilder.BuildHeroSlides(settings, [product], "/safe-hero.png"));
+        Assert.Equal("/safe-hero.png", slide.ImageUrl);
+        Assert.Equal("#product-license-pro", slide.LinkUrl);
+        Assert.False(DigitalStorefrontBuilder.IsSafePublicResourceUrl("//evil.example/image.png"));
+        Assert.True(DigitalStorefrontBuilder.IsSafePublicResourceUrl("/stores/demo/image.png"));
+    }
+
+    [Fact]
+    public void Hero_product_attachment_can_link_to_product_detail_page()
+    {
+        var product = Product(DigitalProductKind.License, "pro");
+        var settings = new DigitalDownloadsSettings
+        {
+            HeroSlides =
+            [
+                new()
+                {
+                    Id = "hero",
+                    Headline = "Pro",
+                    ProductReference = DigitalStorefrontBuilder.ProductReference(product)
+                }
+            ]
+        };
+
+        var slide = Assert.Single(DigitalStorefrontBuilder.BuildHeroSlides(
+            settings,
+            [product],
+            "/safe-hero.png",
+            linkedProduct => $"/products/{DigitalStorefrontBuilder.ProductKindSegment(linkedProduct)}/{linkedProduct.Slug}"));
+
+        Assert.Equal("/products/license/pro", slide.LinkUrl);
+    }
+
+    [Fact]
+    public void MakePay_attribution_is_enforced_and_cannot_be_overridden()
+    {
+        var settings = new DigitalDownloadsSettings
+        {
+            ShowMakePayPromotion = false,
+            PromotionText = "Custom attribution"
+        };
+
+        DigitalStorefrontBuilder.EnforceMakePayAttribution(settings);
+
+        Assert.True(settings.ShowMakePayPromotion);
+        Assert.Equal(DigitalStorefrontBuilder.EnforcedPromotionText, settings.PromotionText);
+    }
+
+    private static StoreProductViewModel Product(DigitalProductKind kind, string id) => new()
+    {
+        Kind = kind,
+        Id = id,
+        Slug = id,
+        Name = id,
+        Description = "Description",
+        Price = 1m
+    };
 }

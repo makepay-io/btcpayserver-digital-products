@@ -14,6 +14,14 @@ namespace BTCPayServer.Plugins.MakePay.DigitalProducts.Services;
 public sealed class ProductFileService(HttpClient httpClient, IOptions<DataDirectories> directories, DownloadTokenService secrets)
 {
     private readonly string _root = Path.Combine(directories.Value.DataDir, "MakePayDigitalDownloads");
+    private const long MaxStorefrontAssetBytes = 10 * 1024 * 1024;
+    private static readonly IReadOnlyDictionary<string, string> StorefrontImageExtensions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["image/png"] = ".png",
+        ["image/jpeg"] = ".jpg",
+        ["image/webp"] = ".webp",
+        ["image/gif"] = ".gif"
+    };
 
     public async Task<(string RelativePath, string FileName, string ContentType, long Size)> SaveLocal(
         string storeId, string productId, IFormFile upload, CancellationToken cancellationToken)
@@ -29,6 +37,50 @@ public sealed class ProductFileService(HttpClient httpClient, IOptions<DataDirec
         await upload.CopyToAsync(output, cancellationToken);
         var relative = Path.GetRelativePath(_root, fullPath).Replace('\\', '/');
         return (relative, cleanName, string.IsNullOrWhiteSpace(upload.ContentType) ? "application/octet-stream" : upload.ContentType, upload.Length);
+    }
+
+    public async Task<(string FileName, string ContentType, long Size)> SaveStorefrontAsset(
+        string storeId,
+        string assetId,
+        IFormFile upload,
+        CancellationToken cancellationToken)
+    {
+        if (ValidateStorefrontAsset(upload) is { } validationError) throw new InvalidOperationException(validationError);
+        var contentType = upload.ContentType?.Split(';', 2)[0].Trim() ?? "";
+        var extension = StorefrontImageExtensions[contentType];
+
+        var directory = Path.Combine(_root, "StorefrontAssets", SafeSegment(storeId), SafeAssetSegment(assetId));
+        Directory.CreateDirectory(directory);
+        var fileName = Guid.NewGuid().ToString("N") + extension;
+        var fullPath = Path.Combine(directory, fileName);
+        await using (var output = new FileStream(fullPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, true))
+            await upload.CopyToAsync(output, cancellationToken);
+
+        foreach (var stale in Directory.EnumerateFiles(directory).Where(path => !path.Equals(fullPath, StringComparison.Ordinal)))
+            File.Delete(stale);
+        return (fileName, contentType, upload.Length);
+    }
+
+    public static string? ValidateStorefrontAsset(IFormFile upload)
+    {
+        if (upload.Length <= 0) return "The uploaded image is empty.";
+        if (upload.Length > MaxStorefrontAssetBytes) return "Storefront images must be 10 MB or smaller.";
+        var contentType = upload.ContentType?.Split(';', 2)[0].Trim() ?? "";
+        return StorefrontImageExtensions.ContainsKey(contentType) ? null : "Use a PNG, JPEG, WebP, or GIF image.";
+    }
+
+    public RemoteFile? OpenStorefrontAsset(string storeId, string assetId, string fileName)
+    {
+        if (SafeAssetSegment(assetId) != assetId || Path.GetFileName(fileName) != fileName) return null;
+        var directory = Path.Combine(_root, "StorefrontAssets", SafeSegment(storeId), SafeAssetSegment(assetId));
+        var fullPath = Path.GetFullPath(Path.Combine(directory, fileName));
+        var root = Path.GetFullPath(directory) + Path.DirectorySeparatorChar;
+        if (!fullPath.StartsWith(root, StringComparison.Ordinal) || !File.Exists(fullPath)) return null;
+        var extension = Path.GetExtension(fileName);
+        var contentType = StorefrontImageExtensions.FirstOrDefault(item => item.Value.Equals(extension, StringComparison.OrdinalIgnoreCase)).Key;
+        if (string.IsNullOrWhiteSpace(contentType)) return null;
+        var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, true);
+        return new RemoteFile(stream, contentType, stream.Length, null);
     }
 
     public async Task<RemoteFile> Open(DigitalProduct product, DigitalDownloadsSettings settings, CancellationToken cancellationToken)
@@ -118,6 +170,7 @@ public sealed class ProductFileService(HttpClient httpClient, IOptions<DataDirec
     private static byte[] Hmac(byte[] key, string value) => HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(value));
     private static string HexSha256(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
     private static string SafeSegment(string value) => string.Concat(value.Where(char.IsLetterOrDigit));
+    private static string SafeAssetSegment(string value) => string.Concat(value.Where(character => char.IsLetterOrDigit(character) || character is '-' or '_'));
     public static bool IsPublicAddress(IPAddress address)
     {
         if (address.IsIPv4MappedToIPv6) address = address.MapToIPv4();

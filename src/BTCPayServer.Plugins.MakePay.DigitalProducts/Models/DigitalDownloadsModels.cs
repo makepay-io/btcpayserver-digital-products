@@ -22,16 +22,52 @@ public enum DigitalStoreFontStyle
 
 public enum DigitalProductKind { Download, License }
 
+public enum DigitalStoreCategoryRule
+{
+    Custom,
+    Downloads,
+    Licenses
+}
+
+public sealed class DigitalHeroSlide
+{
+    [Required, StringLength(80)] public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public bool Visible { get; set; } = true;
+    [StringLength(80)] public string Eyebrow { get; set; } = "MakePay Digital";
+    [Required, StringLength(180)] public string Headline { get; set; } = "Digital goods, delivered directly";
+    [StringLength(320)] public string SupportingCopy { get; set; } = "Secure downloads and software licenses, paid directly with BTCPay Server.";
+    [StringLength(500)] public string? ImageUrl { get; set; }
+    [StringLength(80)] public string ButtonText { get; set; } = "Explore products";
+    [StringLength(500)] public string LinkUrl { get; set; } = "#products";
+    [StringLength(180)] public string? ProductReference { get; set; }
+}
+
+public sealed class DigitalStoreCategory
+{
+    [Required, StringLength(80)] public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public bool Visible { get; set; } = true;
+    [Required, StringLength(80)] public string Name { get; set; } = "New category";
+    [Required, StringLength(80), RegularExpression("^[a-z0-9]+(?:-[a-z0-9]+)*$")] public string Slug { get; set; } = "new-category";
+    public DigitalStoreCategoryRule Rule { get; set; }
+    public List<string> ProductReferences { get; set; } = [];
+}
+
 public sealed class DigitalDownloadsSettings
 {
     [Required, StringLength(80)] public string StorefrontTitle { get; set; } = "Digital downloads";
     [StringLength(500)] public string StorefrontDescription { get; set; } = "Secure files, delivered after payment.";
+    [StringLength(240)] public string StorefrontAnnouncement { get; set; } = "Secure downloads and software licenses, paid directly with BTCPay Server.";
     [Required, StringLength(10)] public string Currency { get; set; } = "USD";
-    [Url, StringLength(500)] public string? LogoUrl { get; set; }
-    [Url, StringLength(500)] public string? HeroImageUrl { get; set; }
+    [StringLength(500)] public string? LogoUrl { get; set; }
+    [Range(80, 360)] public int LogoWidth { get; set; } = 190;
+    [Range(24, 120)] public int LogoHeight { get; set; } = 40;
+    [StringLength(500)] public string? HeroImageUrl { get; set; }
     [StringLength(80)] public string HeroEyebrow { get; set; } = "MakePay Digital";
     [StringLength(180)] public string HeroHeadline { get; set; } = "Digital goods, delivered directly";
     [StringLength(320)] public string HeroSubheadline { get; set; } = "Secure downloads and software licenses, paid directly with BTCPay Server.";
+    [Range(0, 30)] public int HeroAutoAdvanceSeconds { get; set; } = 6;
+    public List<DigitalHeroSlide> HeroSlides { get; set; } = [];
+    public List<DigitalStoreCategory> StorefrontCategories { get; set; } = DefaultCategories();
     [StringLength(120)] public string CatalogTitle { get; set; } = "Explore digital products";
     [StringLength(280)] public string CatalogSubtitle { get; set; } = "Add products to your cart and access every purchase from one private library.";
     [StringLength(120)] public string LibraryTitle { get; set; } = "Your purchases";
@@ -74,6 +110,31 @@ public sealed class DigitalDownloadsSettings
     public string? ProtectedS3SecretKey { get; set; }
     [StringLength(200)] public string? RemoteAuthorizationHeader { get; set; }
     public string? ProtectedRemoteAuthorizationValue { get; set; }
+
+    public IReadOnlyList<DigitalHeroSlide> EffectiveHeroSlides()
+    {
+        if (HeroSlides is { Count: > 0 }) return HeroSlides;
+        return
+        [
+            new DigitalHeroSlide
+            {
+                Id = "default",
+                Eyebrow = HeroEyebrow,
+                Headline = HeroHeadline,
+                SupportingCopy = HeroSubheadline,
+                ImageUrl = HeroImageUrl
+            }
+        ];
+    }
+
+    public IReadOnlyList<DigitalStoreCategory> EffectiveStorefrontCategories() =>
+        StorefrontCategories is { Count: > 0 } ? StorefrontCategories : DefaultCategories();
+
+    public static List<DigitalStoreCategory> DefaultCategories() =>
+    [
+        new() { Id = "downloads", Name = "Downloads", Slug = "downloads", Rule = DigitalStoreCategoryRule.Downloads },
+        new() { Id = "licenses", Name = "Licenses", Slug = "licenses", Rule = DigitalStoreCategoryRule.Licenses }
+    ];
 }
 
 public sealed class DigitalProduct
@@ -225,14 +286,36 @@ public sealed class StorefrontViewModel
     public required LicenseManagerSettings LicenseSettings { get; init; }
     public required IReadOnlyList<LicenseProduct> LicenseProducts { get; init; }
     public required IReadOnlyList<StoreProductViewModel> Catalog { get; init; }
+    public required IReadOnlyList<DigitalHeroSlideViewModel> HeroSlides { get; init; }
+    public required IReadOnlyList<DigitalStoreCategoryViewModel> Categories { get; init; }
+    public string? ActiveCategorySlug { get; init; }
     public int CartCount { get; init; }
     public string? CustomerEmail { get; init; }
+}
+
+public sealed class DigitalHeroSlideViewModel
+{
+    public required string Id { get; init; }
+    public required string Eyebrow { get; init; }
+    public required string Headline { get; init; }
+    public required string SupportingCopy { get; init; }
+    public required string ImageUrl { get; init; }
+    public required string ButtonText { get; init; }
+    public required string LinkUrl { get; init; }
+}
+
+public sealed class DigitalStoreCategoryViewModel
+{
+    public required string Slug { get; init; }
+    public required string Name { get; init; }
+    public required IReadOnlySet<string> ProductReferences { get; init; }
 }
 
 public sealed class StoreProductViewModel
 {
     public required DigitalProductKind Kind { get; init; }
     public required string Id { get; init; }
+    public required string Slug { get; init; }
     public required string Name { get; init; }
     public required string Description { get; init; }
     public required decimal Price { get; init; }
@@ -240,6 +323,17 @@ public sealed class StoreProductViewModel
     public string? Badge { get; init; }
     public string? ImageUrl { get; init; }
     public string Meta { get; init; } = "";
+}
+
+public sealed class DigitalProductDetailViewModel
+{
+    public required string StoreId { get; init; }
+    public required DigitalDownloadsSettings Settings { get; init; }
+    public required StoreProductViewModel Product { get; init; }
+    public required IReadOnlyList<DigitalStoreCategoryViewModel> Categories { get; init; }
+    public required IReadOnlyList<StoreProductViewModel> RelatedProducts { get; init; }
+    public int CartCount { get; init; }
+    public string? CustomerEmail { get; init; }
 }
 
 public sealed class CartLineViewModel

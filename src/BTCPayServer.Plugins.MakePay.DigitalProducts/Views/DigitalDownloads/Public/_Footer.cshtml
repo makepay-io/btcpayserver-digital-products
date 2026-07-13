@@ -2,5 +2,5 @@
 <footer class="dp-footer">
     <div>@Model.FooterText</div>
     <div>@if(Model.PrivacyUrl is not null){<a href="@Model.PrivacyUrl" target="_blank" rel="noopener noreferrer">Privacy</a>} @if(Model.TermsUrl is not null){<a href="@Model.TermsUrl" target="_blank" rel="noopener noreferrer">Terms</a>}</div>
-    @if(Model.ShowMakePayPromotion){<div class="dp-promotion">@Model.PromotionText <a href="https://makepay.io" target="_blank" rel="noopener noreferrer">Enable multicurrency</a>.</div>}
+    <div class="dp-promotion"><a href="https://makepay.io" target="_blank" rel="noopener noreferrer">@DigitalStorefrontBuilder.EnforcedPromotionText</a></div>
 </footer>
