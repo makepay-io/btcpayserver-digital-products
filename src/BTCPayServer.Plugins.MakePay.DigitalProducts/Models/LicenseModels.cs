@@ -34,11 +34,13 @@ public sealed class LicenseProduct
     [Required, StringLength(160)] public string Name { get; set; } = "New license";
     [StringLength(4000)] public string Description { get; set; } = "";
     [Range(0.00000001, 1000000000)] public decimal Price { get; set; }
+    [Range(0.00000001, 1000000000)] public decimal? CompareAtPrice { get; set; }
+    [StringLength(80)] public string? Badge { get; set; }
     [Required, StringLength(200)] public string KeyPattern { get; set; } = "MP-{A:4}-{X:6}-{N:4}";
     [Range(1, 100)] public int MaxActivations { get; set; } = 1;
     [Range(1, 36500)] public int? DurationDays { get; set; } = 365;
     public bool Active { get; set; } = true;
-    [StringLength(500)] public string? ImageUrl { get; set; }
+    [Url, StringLength(500)] public string? ImageUrl { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
@@ -69,6 +71,7 @@ public sealed class ManagedLicense
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string StoreId { get; set; } = "";
     public string ProductId { get; set; } = "";
+    public string? CheckoutId { get; set; }
     public string? OrderId { get; set; }
     public string? InvoiceId { get; set; }
     public string CustomerEmail { get; set; } = "";
@@ -90,6 +93,7 @@ public sealed class LicenseOrder
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string StoreId { get; set; } = "";
     public string ProductId { get; set; } = "";
+    public string? CheckoutId { get; set; }
     public string? InvoiceId { get; set; }
     public string? LicenseId { get; set; }
     public string BuyerEmail { get; set; } = "";

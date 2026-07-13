@@ -94,6 +94,7 @@ public sealed class DigitalDownloadsAdminController(
     {
         if (await stores.FindStore(storeId) is null) return NotFound();
         ViewData["StoreId"] = storeId;
+        ViewData["PreviewStoreUrl"] = Url.Action(nameof(DigitalDownloadsPublicController.Storefront), "DigitalDownloadsPublic", new { storeId });
         ViewData.SetActivePage("DigitalDownloadsSettings", "Digital Downloads", "Storefront & delivery settings");
         return View("~/Views/DigitalDownloads/Settings.cshtml", await repository.GetSettings(storeId));
     }
@@ -105,6 +106,7 @@ public sealed class DigitalDownloadsAdminController(
         var existing = await repository.GetSettings(storeId);
         posted.ProtectedS3SecretKey = string.IsNullOrWhiteSpace(s3SecretKey) ? existing.ProtectedS3SecretKey : secrets.ProtectSecret(s3SecretKey);
         posted.ProtectedRemoteAuthorizationValue = string.IsNullOrWhiteSpace(remoteAuthorizationValue) ? existing.ProtectedRemoteAuthorizationValue : secrets.ProtectSecret(remoteAuthorizationValue);
+        posted.CustomerAccountsEnabled = true;
         if (posted.DefaultDownloadLimit < 1 || posted.DefaultLinkHours < 1) ModelState.AddModelError("", "Download limit and link lifetime must be at least one.");
         if (!string.IsNullOrWhiteSpace(posted.RemoteAuthorizationHeader) && !ProductFileService.IsSafeHeaderName(posted.RemoteAuthorizationHeader)) ModelState.AddModelError(nameof(posted.RemoteAuthorizationHeader), "Use a valid HTTP header name; connection, cookie, and framing headers are not allowed.");
         if (!string.IsNullOrWhiteSpace(remoteAuthorizationValue) && (remoteAuthorizationValue.Contains('\r') || remoteAuthorizationValue.Contains('\n'))) ModelState.AddModelError("remoteAuthorizationValue", "Authorization values cannot contain line breaks.");

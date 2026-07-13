@@ -1,0 +1,30 @@
+@model CustomerLibraryViewModel
+@{ Layout = null; }
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Purchases · @Model.Settings.StorefrontTitle</title>
+    <partial name="~/Views/DigitalDownloads/Public/_Theme.cshtml" model="Model.Settings" />
+</head>
+<body class="dp-public">
+<main class="dp-shell">
+    <header class="dp-topbar">
+        <a class="dp-topbar-brand" asp-action="Storefront" asp-route-storeId="@Model.StoreId">@Model.Settings.StorefrontTitle</a>
+        <nav class="dp-topnav"><a class="dp-nav-link" asp-action="Storefront" asp-route-storeId="@Model.StoreId">Browse</a><a class="dp-nav-link is-active" asp-action="Account" asp-route-storeId="@Model.StoreId">Purchases</a><a class="dp-nav-link cart" asp-action="CartPage" asp-route-storeId="@Model.StoreId">Cart · @Model.CartCount</a></nav>
+    </header>
+    <div style="display:flex;justify-content:space-between;gap:20px;align-items:end;flex-wrap:wrap">
+        <div><p class="dp-eyebrow">Signed in as @Model.CustomerEmail</p><h1 class="dp-section-heading">@Model.Settings.LibraryTitle</h1><p class="dp-section-copy">@Model.Settings.LibrarySubtitle</p></div>
+        <form method="post" asp-action="Logout" asp-route-storeId="@Model.StoreId"><button class="dp-secondary" type="submit">Sign out</button></form>
+    </div>
+    @if(Model.Downloads.Count==0 && Model.Licenses.Count==0){<div class="dp-empty"><p>You do not have fulfilled products yet.</p><a class="dp-primary" asp-action="Storefront" asp-route-storeId="@Model.StoreId">Browse the shop</a></div>}else{
+    <div class="dp-library-grid">
+        <section class="dp-library-section"><header><h2>Downloads · @Model.Downloads.Count</h2></header>@if(Model.Downloads.Count==0){<div class="dp-library-item"><p class="dp-library-meta">No protected downloads in this account.</p></div>}@foreach(var item in Model.Downloads){<article class="dp-library-item"><h3>@item.Product.Name</h3><p class="dp-library-meta">@($"{item.Order.DownloadCount} of {item.Order.MaxDownloads} used{(item.Order.ExpiresAt is null ? "" : " · Expires " + item.Order.ExpiresAt.Value.ToString("d MMM yyyy, HH:mm 'UTC'"))}")</p>@if(item.DownloadUrl is not null){<a class="dp-primary" href="@item.DownloadUrl">Download file</a>}else{<span class="dp-status">Unavailable</span>}</article>}</section>
+        <section class="dp-library-section"><header><h2>Licenses · @Model.Licenses.Count</h2></header>@if(Model.Licenses.Count==0){<div class="dp-library-item"><p class="dp-library-meta">No software licenses in this account.</p></div>}@foreach(var item in Model.Licenses){<article class="dp-library-item"><h3>@item.Product.Name</h3><p class="dp-library-meta">@($"{item.License.Status} · {item.License.Activations.Count} of {item.License.MaxActivations} activations{(item.License.ExpiresAt is null ? "" : " · Expires " + item.License.ExpiresAt.Value.ToString("d MMM yyyy"))}")</p>@if(item.LicenseKey is not null){<input class="dp-key" value="@item.LicenseKey" readonly aria-label="License key for @item.Product.Name">}</article>}</section>
+    </div>}
+    <section class="dp-order-list"><p class="dp-eyebrow">Purchase history</p><div class="dp-card">@if(Model.Purchases.Count==0){<div class="dp-library-item"><p class="dp-library-meta">Your completed checkouts will appear here.</p></div>}@foreach(var purchase in Model.Purchases.OrderByDescending(item=>item.CreatedAt)){<div class="dp-order-row"><div><strong>@purchase.Lines.Sum(line=>line.Quantity) product@(purchase.Lines.Sum(line=>line.Quantity)==1?"":"s")</strong><div class="dp-library-meta">@purchase.CreatedAt.ToString("d MMM yyyy") · @purchase.Id[..8]</div></div><strong>@purchase.Total.ToString("0.00") @purchase.Currency</strong><span class="dp-status @(purchase.Status==DigitalCheckoutStatus.Paid?"paid":"")">@purchase.Status</span></div>}</div></section>
+    <partial name="~/Views/DigitalDownloads/Public/_Footer.cshtml" model="Model.Settings" />
+</main>
+</body>
+</html>
