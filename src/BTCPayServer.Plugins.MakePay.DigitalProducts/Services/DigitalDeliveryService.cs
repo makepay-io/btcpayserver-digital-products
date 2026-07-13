@@ -35,7 +35,7 @@ public sealed class DigitalDeliveryService(
         if (!eligible) return;
         var order = await repository.GetOrder(invoiceEvent.Invoice.StoreId, orderId);
         if (order is null || order.Status is DigitalOrderStatus.Revoked or DigitalOrderStatus.Paid) return;
-        var product = await repository.GetProduct(order.StoreId, order.ProductId);
+        var product = order.ProductSnapshot?.ToProduct() ?? await repository.GetProduct(order.StoreId, order.ProductId);
         if (product is null) return;
         var created = tokens.Create();
         order.Status = DigitalOrderStatus.Paid;
@@ -44,6 +44,7 @@ public sealed class DigitalDeliveryService(
         order.MaxDownloads = product.DownloadLimit ?? settings.DefaultDownloadLimit;
         order.TokenHash = created.Hash;
         order.ProtectedToken = created.ProtectedToken;
+        order.ProductSnapshot ??= DigitalProductSnapshot.From(product);
         await repository.SaveOrder(order.StoreId, order);
         await QueueEmail(order, product, settings, created.Token);
     }
@@ -51,7 +52,8 @@ public sealed class DigitalDeliveryService(
     private async Task QueueEmail(DigitalOrder order, DigitalProduct product, DigitalDownloadsSettings settings, string token)
     {
         if (!settings.EmailDeliveryEnabled || string.IsNullOrWhiteSpace(order.BuyerEmail)) return;
-        var path = links.GetPathByAction("Download", "DigitalDownloadsPublic", new { storeId = order.StoreId, orderId = order.Id, token })!;
+        var action = product.DeliveryMode == DigitalDeliveryMode.Stream ? "Stream" : "Download";
+        var path = links.GetPathByAction(action, "DigitalDownloadsPublic", new { storeId = order.StoreId, orderId = order.Id, token })!;
         var downloadUrl = order.PublicBaseUrl.TrimEnd('/') + path;
         string Encode(string value) => HtmlEncoder.Default.Encode(value);
         var body = settings.EmailHtml

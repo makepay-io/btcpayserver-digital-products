@@ -12,19 +12,41 @@ public sealed class DigitalDownloadsRepository(StoreRepository stores)
     public async Task<DigitalDownloadsSettings> GetSettings(string storeId)
     {
         var settings = await stores.GetSettingAsync<DigitalDownloadsSettings>(storeId, DigitalProductsPlugin.SettingsKey) ?? new();
+        settings.StorefrontCategories ??= [];
+        settings.HeroSlides ??= [];
+        foreach (var category in settings.StorefrontCategories) category.ProductReferences ??= [];
+        var changed = !settings.ShowMakePayPromotion ||
+                      !string.Equals(settings.PromotionText, DigitalStorefrontBuilder.EnforcedPromotionText, StringComparison.Ordinal);
+        if (!settings.MediaCategoryDefaultsApplied)
+        {
+            var existingIds = settings.StorefrontCategories.Select(category => category.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var existingSlugs = settings.StorefrontCategories.Select(category => category.Slug).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var category in DigitalDownloadsSettings.DefaultCategories().Where(category => !existingIds.Contains(category.Id) && !existingSlugs.Contains(category.Slug)))
+                settings.StorefrontCategories.Add(category);
+            settings.MediaCategoryDefaultsApplied = true;
+            changed = true;
+        }
         DigitalStorefrontBuilder.EnforceMakePayAttribution(settings);
+        if (changed) await stores.UpdateSetting(storeId, DigitalProductsPlugin.SettingsKey, settings);
         return settings;
     }
 
     public Task SaveSettings(string storeId, DigitalDownloadsSettings settings)
     {
+        // This is a one-time upgrade marker, not a merchant-editable setting. Preserve it
+        // server-side so intentionally removed default categories are not recreated later.
+        settings.MediaCategoryDefaultsApplied = true;
         DigitalStorefrontBuilder.EnforceMakePayAttribution(settings);
         return stores.UpdateSetting(storeId, DigitalProductsPlugin.SettingsKey, settings);
     }
 
-    public async Task<IReadOnlyList<DigitalProduct>> GetProducts(string storeId) =>
-        (await stores.GetSettingAsync<DigitalCatalog>(storeId, DigitalProductsPlugin.CatalogKey) ?? new()).Products
-        .OrderBy(product => product.Name, StringComparer.OrdinalIgnoreCase).ToList();
+    public async Task<IReadOnlyList<DigitalProduct>> GetProducts(string storeId)
+    {
+        var catalog = await stores.GetSettingAsync<DigitalCatalog>(storeId, DigitalProductsPlugin.CatalogKey) ?? new();
+        catalog.Products ??= [];
+        foreach (var product in catalog.Products) product.PreviewAssets ??= [];
+        return catalog.Products.OrderBy(product => product.Name, StringComparer.OrdinalIgnoreCase).ToList();
+    }
 
     public async Task<DigitalProduct?> GetProduct(string storeId, string idOrSlug) =>
         (await GetProducts(storeId)).FirstOrDefault(product =>

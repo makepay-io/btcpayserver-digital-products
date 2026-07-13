@@ -30,7 +30,7 @@ public sealed class DigitalDownloadsAdminController(
     public async Task<IActionResult> Index(string storeId)
     {
         if (await stores.FindStore(storeId) is null) return NotFound();
-        ViewData.SetActivePage("DigitalDownloads", "Digital Downloads", "Digital Downloads");
+        ViewData.SetActivePage("DigitalDownloads", "Digital Products", "Digital Products");
         return View("~/Views/DigitalDownloads/Index.cshtml", new DigitalDownloadsDashboardViewModel
         {
             StoreId = storeId,
@@ -48,38 +48,97 @@ public sealed class DigitalDownloadsAdminController(
         var product = string.IsNullOrWhiteSpace(productId) ? new DigitalProduct() : await repository.GetProduct(storeId, productId);
         if (product is null) return NotFound();
         ViewData["StoreId"] = storeId;
-        ViewData.SetActivePage("DigitalDownloads", "Digital Downloads", product.Id.Length == 0 ? "New product" : product.Name);
+        ViewData.SetActivePage("DigitalDownloads", "Digital Products", product.Id.Length == 0 ? "New product" : product.Name);
         return View("~/Views/DigitalDownloads/Product.cshtml", product);
     }
 
     [HttpPost("products/{productId}")]
-    public async Task<IActionResult> SaveProduct(string storeId, string productId, DigitalProduct posted, IFormFile? upload, CancellationToken cancellationToken)
+    public async Task<IActionResult> SaveProduct(
+        string storeId,
+        string productId,
+        DigitalProduct posted,
+        IFormFile? upload,
+        IFormFile? coverUpload,
+        List<IFormFile>? previewUploads,
+        string? removePreviewAssetIds,
+        CancellationToken cancellationToken)
     {
         if (await stores.FindStore(storeId) is null) return NotFound();
         var existing = productId == "new" ? null : await repository.GetProduct(storeId, productId);
         posted.Id = existing?.Id ?? Guid.NewGuid().ToString("N");
         posted.CreatedAt = existing?.CreatedAt ?? DateTimeOffset.UtcNow;
+        posted.PreviewAssets = existing?.PreviewAssets.ToList() ?? [];
+        var removedIds = (removePreviewAssetIds ?? "").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        posted.PreviewAssets.RemoveAll(asset => removedIds.Contains(asset.Id));
+
+        NormalizeProduct(posted);
         if (upload is not null)
         {
-            var saved = await files.SaveLocal(storeId, posted.Id, upload, cancellationToken);
-            posted.StorageKind = ProductStorageKind.Local;
-            posted.StorageLocation = saved.RelativePath;
-            posted.DownloadFileName = saved.FileName;
-            posted.ContentType = saved.ContentType;
-            posted.FileSize = saved.Size;
+            if (await files.ValidateProductAsset(posted.ProductType, upload, cancellationToken) is { } uploadError)
+            {
+                ModelState.AddModelError(nameof(upload), uploadError);
+            }
+            else
+            {
+                var saved = await files.SaveLocal(storeId, posted.Id, upload, cancellationToken, posted.ProductType);
+                posted.StorageKind = ProductStorageKind.Local;
+                posted.StorageLocation = saved.RelativePath;
+                posted.DownloadFileName = saved.FileName;
+                posted.ContentType = saved.ContentType;
+                posted.FileSize = saved.Size;
+            }
         }
-        else if (posted.StorageKind == ProductStorageKind.Local && existing is not null)
+        else if (posted.StorageKind == ProductStorageKind.Local && existing?.StorageKind == ProductStorageKind.Local)
         {
             posted.StorageLocation = existing.StorageLocation;
             posted.DownloadFileName = existing.DownloadFileName;
             posted.ContentType = existing.ContentType;
             posted.FileSize = existing.FileSize;
         }
+        else if (posted.StorageKind == ProductStorageKind.Local)
+        {
+            ModelState.AddModelError(nameof(upload), "Upload the protected product file before saving a local product.");
+        }
+
+        if (coverUpload is not null && ProductFileService.ValidateStorefrontAsset(coverUpload) is { } coverError)
+            ModelState.AddModelError(nameof(coverUpload), coverError);
+
+        previewUploads ??= [];
+        if (posted.ProductType != DigitalProductType.PhotosArt && posted.PreviewAssets.Count + previewUploads.Count > 1)
+            ModelState.AddModelError(nameof(previewUploads), "PDF, audio, video, and file products support one public preview file.");
+        if (posted.PreviewAssets.Count + previewUploads.Count > 12)
+            ModelState.AddModelError(nameof(previewUploads), "A product can have up to 12 public preview assets.");
+        foreach (var preview in previewUploads)
+        {
+            if (await files.ValidatePreviewAsset(posted.ProductType, preview, cancellationToken) is { } previewError)
+                ModelState.AddModelError(nameof(previewUploads), previewError);
+        }
+
+        ValidateProductConfiguration(posted);
         if (!ModelState.IsValid)
         {
             ViewData["StoreId"] = storeId;
             return View("~/Views/DigitalDownloads/Product.cshtml", posted);
         }
+
+        if (coverUpload is not null)
+        {
+            var saved = await files.SaveStorefrontAsset(storeId, $"product-{posted.Id}", coverUpload, cancellationToken);
+            posted.ImageUrl = Url.Action(nameof(DigitalDownloadsPublicController.StorefrontAsset), "DigitalDownloadsPublic", new { storeId, assetId = $"product-{posted.Id}", fileName = saved.FileName });
+        }
+
+        var nextSortOrder = posted.PreviewAssets.Count == 0 ? 0 : posted.PreviewAssets.Max(asset => asset.SortOrder) + 1;
+        foreach (var preview in previewUploads)
+        {
+            var saved = await files.SavePreviewLocal(storeId, posted.Id, PreviewLabel(posted.ProductType, posted.PreviewAssets.Count), preview, cancellationToken, posted.ProductType);
+            saved.SortOrder = nextSortOrder++;
+            saved.AltText = posted.ProductType == DigitalProductType.PhotosArt ? $"Preview of {posted.Name}" : null;
+            saved.Watermarked = posted.ProductType == DigitalProductType.PhotosArt && posted.WatermarkPreviews &&
+                                saved.ContentType.Equals("image/webp", StringComparison.OrdinalIgnoreCase) &&
+                                saved.FileName.Contains("watermarked", StringComparison.OrdinalIgnoreCase);
+            posted.PreviewAssets.Add(saved);
+        }
+        posted.PreviewEnabled = posted.PreviewEnabled && posted.PreviewAssets.Count > 0;
         try { await repository.SaveProduct(storeId, posted); }
         catch (InvalidOperationException ex) { ModelState.AddModelError(nameof(posted.Slug), ex.Message); ViewData["StoreId"] = storeId; return View("~/Views/DigitalDownloads/Product.cshtml", posted); }
         TempData.SetStatusMessageModel(new StatusMessageModel { Severity = StatusMessageModel.StatusSeverity.Success, Message = "Product saved." });
@@ -89,6 +148,12 @@ public sealed class DigitalDownloadsAdminController(
     [HttpPost("products/{productId}/delete")]
     public async Task<IActionResult> DeleteProduct(string storeId, string productId)
     {
+        var legacyOrders = (await repository.GetOrders(storeId)).Any(order => order.ProductId == productId && order.ProductSnapshot is null);
+        if (legacyOrders)
+        {
+            TempData.SetStatusMessageModel(new StatusMessageModel { Severity = StatusMessageModel.StatusSeverity.Error, Message = "This product has earlier purchases without a content snapshot. Unpublish it instead so those customers keep access." });
+            return RedirectToAction(nameof(Product), new { storeId, productId });
+        }
         await repository.DeleteProduct(storeId, productId);
         TempData.SetStatusMessageModel(new StatusMessageModel { Severity = StatusMessageModel.StatusSeverity.Success, Message = "Product removed from the catalog." });
         return RedirectToAction(nameof(Index), new { storeId });
@@ -192,7 +257,7 @@ public sealed class DigitalDownloadsAdminController(
             posted.HeroImageUrl = primarySlide.ImageUrl;
         }
         await repository.SaveSettings(storeId, posted);
-        TempData.SetStatusMessageModel(new StatusMessageModel { Severity = StatusMessageModel.StatusSeverity.Success, Message = "Digital download settings saved." });
+        TempData.SetStatusMessageModel(new StatusMessageModel { Severity = StatusMessageModel.StatusSeverity.Success, Message = "Digital product settings saved." });
         return RedirectToAction(nameof(Settings), new { storeId });
     }
 
@@ -254,13 +319,55 @@ public sealed class DigitalDownloadsAdminController(
 
     private static bool IsSafeId(string? value) => value is { Length: > 0 and <= 80 } && value.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_');
 
+    private static void NormalizeProduct(DigitalProduct product)
+    {
+        if (product.ProductType is DigitalProductType.FileDownload or DigitalProductType.PhotosArt)
+            product.DeliveryMode = DigitalDeliveryMode.Download;
+        product.WatermarkText = string.IsNullOrWhiteSpace(product.WatermarkText) ? "PREVIEW" : product.WatermarkText.Trim();
+        product.PreviewHeading = string.IsNullOrWhiteSpace(product.PreviewHeading) ? PreviewLabel(product.ProductType, 0) : product.PreviewHeading.Trim();
+    }
+
+    private void ValidateProductConfiguration(DigitalProduct product)
+    {
+        if (!DigitalStorefrontBuilder.IsSafePublicResourceUrl(product.ImageUrl))
+            ModelState.AddModelError(nameof(product.ImageUrl), "Cover URLs must use HTTP(S) or an uploaded local image.");
+        if (product.DeliveryMode != DigitalDeliveryMode.Download && product.ProductType is DigitalProductType.FileDownload or DigitalProductType.PhotosArt)
+            ModelState.AddModelError(nameof(product.DeliveryMode), "File and photo products are delivered as protected downloads.");
+        if (product.DeliveryMode != DigitalDeliveryMode.Download)
+        {
+            var validStreamType = product.ProductType switch
+            {
+                DigitalProductType.PdfEbook => product.ContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase),
+                DigitalProductType.Audio => product.ContentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase),
+                DigitalProductType.Video => product.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase),
+                _ => false
+            };
+            if (!validStreamType) ModelState.AddModelError(nameof(product.DeliveryMode), "Streaming requires a PDF, browser-compatible audio file, or browser-compatible video file.");
+        }
+        if (product.ProductType == DigitalProductType.PdfEbook && product.StorageLocation is not null && !product.ContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase))
+            ModelState.AddModelError(nameof(product.ContentType), "PDF / ebook products require a PDF protected file.");
+        if (product.ProductType == DigitalProductType.Audio && product.StorageLocation is not null && !product.ContentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase))
+            ModelState.AddModelError(nameof(product.ContentType), "Music & audio products require an audio protected file.");
+        if (product.ProductType == DigitalProductType.Video && product.StorageLocation is not null && !product.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase))
+            ModelState.AddModelError(nameof(product.ContentType), "Video products require a video protected file.");
+    }
+
+    private static string PreviewLabel(DigitalProductType type, int index) => type switch
+    {
+        DigitalProductType.PdfEbook => "Book preview",
+        DigitalProductType.Audio => "Audio demo",
+        DigitalProductType.Video => "Video trailer",
+        DigitalProductType.PhotosArt => $"Gallery image {index + 1}",
+        _ => "Product sample"
+    };
+
     private async Task PrepareSettingsViewData(string storeId, IReadOnlyList<StoreProductViewModel>? catalog = null)
     {
         catalog ??= checkoutService.BuildCatalog(await repository.GetProducts(storeId), await licenses.GetProducts(storeId));
         ViewData["StoreId"] = storeId;
         ViewData["PreviewStoreUrl"] = Url.Action(nameof(DigitalDownloadsPublicController.Storefront), "DigitalDownloadsPublic", new { storeId });
         ViewData["CatalogOptions"] = catalog;
-        ViewData.SetActivePage("DigitalDownloadsSettings", "Digital Downloads", "Storefront & delivery settings");
+        ViewData.SetActivePage("DigitalDownloadsSettings", "Digital Products", "Storefront & delivery settings");
     }
 
     [HttpPost("orders/{orderId}/revoke")]

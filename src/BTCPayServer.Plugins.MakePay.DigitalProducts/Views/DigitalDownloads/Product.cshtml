@@ -1,23 +1,527 @@
 @model DigitalProduct
-@{ var storeId = ViewData["StoreId"]?.ToString(); ViewData.SetActivePage("DigitalDownloads", "Digital Downloads", Model.Name); }
-<h2>@(Model.CreatedAt == default ? "New product" : Model.Name)</h2>
-<partial name="_StatusMessage" />
-<form method="post" enctype="multipart/form-data" asp-action="SaveProduct" asp-route-storeId="@storeId" asp-route-productId="@(Model.Id == "" ? "new" : Model.Id)">
-<div asp-validation-summary="All" class="text-danger"></div>
-<div class="row g-4"><div class="col-lg-7">
-<div class="form-group"><label asp-for="Name" class="form-label"></label><input asp-for="Name" class="form-control" /></div>
-<div class="form-group"><label asp-for="Slug" class="form-label"></label><input asp-for="Slug" class="form-control" /></div>
-<div class="form-group"><label asp-for="Description" class="form-label"></label><textarea asp-for="Description" rows="6" class="form-control"></textarea></div>
-<div class="row"><div class="col-md-4 form-group"><label asp-for="Price" class="form-label"></label><input asp-for="Price" class="form-control" /></div><div class="col-md-4 form-group"><label asp-for="CompareAtPrice" class="form-label">Compare-at price</label><input asp-for="CompareAtPrice" class="form-control" placeholder="Optional" /></div><div class="col-md-4 form-group"><label asp-for="Badge" class="form-label">Badge</label><input asp-for="Badge" class="form-control" placeholder="Popular" /></div></div>
-<div class="form-group"><label asp-for="ImageUrl" class="form-label">Cover image URL</label><input asp-for="ImageUrl" class="form-control" /></div>
-<div class="form-check"><input asp-for="Active" class="form-check-input" /><label asp-for="Active" class="form-check-label">Published</label></div>
-</div><div class="col-lg-5"><div class="bg-tile rounded p-4">
-<h4>Protected file source</h4>
-<div class="form-group"><label asp-for="StorageKind" class="form-label">Provider</label><select asp-for="StorageKind" asp-items="Html.GetEnumSelectList<ProductStorageKind>()" class="form-select"></select></div>
-<div class="form-group"><label class="form-label">Upload local file</label><input type="file" name="upload" class="form-control" /><div class="form-text">Uploading switches the provider to Local. Existing local files remain unchanged if empty.</div></div>
-<div class="form-group"><label asp-for="StorageLocation" class="form-label">S3 object key or custom URL</label><input asp-for="StorageLocation" class="form-control" /><div class="form-text">For S3 enter the object key. For Custom URL enter an absolute HTTP(S) URL.</div></div>
-<div class="form-group"><label asp-for="DownloadFileName" class="form-label">Customer filename</label><input asp-for="DownloadFileName" class="form-control" /></div>
-<div class="row"><div class="col"><label asp-for="DownloadLimit" class="form-label">Download limit</label><input asp-for="DownloadLimit" class="form-control" placeholder="Store default" /></div><div class="col"><label asp-for="LinkHours" class="form-label">Link hours</label><input asp-for="LinkHours" class="form-control" placeholder="Store default" /></div></div>
-</div></div></div>
-<div class="d-flex gap-2 mt-4"><button class="btn btn-primary" type="submit">Save product</button><a class="btn btn-secondary" asp-action="Index" asp-route-storeId="@storeId">Cancel</a></div>
-</form>
+@{
+    var storeId = ViewData["StoreId"]?.ToString();
+    var routeProductId = ViewContext.RouteData.Values["productId"]?.ToString();
+    var isNew = string.IsNullOrWhiteSpace(routeProductId) || routeProductId == "new";
+    var saveProductId = isNew ? "new" : Model.Id;
+    var heading = isNew ? "Create digital product" : Model.Name;
+    var imagePreviewUrl = Model.ImageUrl;
+    if (!string.IsNullOrWhiteSpace(imagePreviewUrl) && imagePreviewUrl.StartsWith('/'))
+        imagePreviewUrl = $"{Context.Request.Scheme}://{Context.Request.Host}{imagePreviewUrl}";
+    ViewData.SetActivePage("DigitalDownloads", "Digital Products", heading);
+}
+
+<style>
+    .mp-product-editor{--mp-border:var(--btcpay-body-border-light,#d0d5dd);--mp-border-strong:var(--btcpay-body-border-medium,#98a2b3);--mp-surface:var(--btcpay-bg-tile,#fff);--mp-soft:var(--btcpay-body-bg-light,#f8fafc);--mp-muted:var(--btcpay-body-text-muted,#667085);--mp-text:var(--btcpay-body-text,#101828);color:var(--mp-text)}
+    .mp-product-editor .sticky-header{gap:1rem;flex-wrap:wrap}.mp-page-heading{min-width:0}.mp-page-heading h2{font-size:1.55rem}.mp-page-kicker{display:flex;align-items:center;gap:.45rem;color:var(--mp-muted);font-size:.82rem}.mp-page-actions{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+    .mp-product-editor .mp-card{border:1px solid var(--mp-border);border-radius:12px;background:var(--mp-surface);padding:1.35rem;margin-bottom:1rem;box-shadow:0 1px 2px rgba(16,24,40,.03)}
+    .mp-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:1.15rem}.mp-card-head h3{margin:0 0 .2rem;font-size:1rem}.mp-card-head p{margin:0;color:var(--mp-muted);font-size:.84rem;line-height:1.45}.mp-section-number{display:inline-grid;place-items:center;width:1.65rem;height:1.65rem;border-radius:50%;margin-right:.45rem;background:var(--mp-soft);color:var(--mp-muted);font-size:.75rem;font-weight:800;border:1px solid var(--mp-border)}
+    .mp-type-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.65rem}.mp-type-input:focus-visible+.mp-type-card{outline:3px solid rgba(var(--btcpay-primary-rgb,21,94,239),.2);outline-offset:2px}.mp-type-card{display:flex;min-height:132px;flex-direction:column;gap:.55rem;padding:.85rem;border:1px solid var(--mp-border);border-radius:10px;background:var(--mp-surface);color:var(--mp-text);cursor:pointer;transition:border-color .15s ease,box-shadow .15s ease,background .15s ease}.mp-type-card:hover{border-color:var(--mp-border-strong)}.mp-type-input:checked+.mp-type-card{border-color:var(--btcpay-primary,#155eef);background:rgba(var(--btcpay-primary-rgb,21,94,239),.055);box-shadow:0 0 0 1px var(--btcpay-primary,#155eef)}.mp-type-icon{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;background:var(--mp-soft);color:var(--btcpay-primary,#155eef)}.mp-type-icon svg,.mp-editor-icon{width:18px;height:18px;fill:currentColor}.mp-type-card strong{font-size:.84rem;line-height:1.25}.mp-type-card small{color:var(--mp-muted);font-size:.72rem;line-height:1.35}
+    .mp-field-help{display:block;margin-top:.35rem;color:var(--mp-muted);font-size:.75rem;line-height:1.45}.mp-field-label{display:flex;align-items:center;justify-content:space-between;gap:.75rem}.mp-field-label small{color:var(--mp-muted);font-weight:400}.mp-form-divider{height:1px;margin:1.2rem 0;background:var(--mp-border)}
+    .mp-upload-zone{position:relative;border:1px dashed var(--mp-border-strong);border-radius:10px;padding:1rem;background:var(--mp-soft)}.mp-upload-zone:focus-within{border-color:var(--btcpay-primary,#155eef);box-shadow:0 0 0 3px rgba(var(--btcpay-primary-rgb,21,94,239),.12)}.mp-upload-zone input[type=file]{background:var(--mp-surface)}.mp-upload-title{display:flex;align-items:center;gap:.55rem;margin-bottom:.25rem;font-weight:700;font-size:.87rem}.mp-upload-title svg{width:18px;height:18px;fill:currentColor;color:var(--btcpay-primary,#155eef)}.mp-current-file{display:flex;align-items:flex-start;gap:.65rem;margin-bottom:.8rem;padding:.7rem;border:1px solid var(--mp-border);border-radius:9px;background:var(--mp-surface)}.mp-current-file svg{width:20px;height:20px;fill:currentColor;color:var(--btcpay-primary,#155eef);margin-top:.1rem;flex:none}.mp-current-file strong{display:block;font-size:.82rem;overflow-wrap:anywhere}.mp-current-file span{display:block;color:var(--mp-muted);font-size:.72rem}
+    .mp-cover-row{display:grid;grid-template-columns:112px minmax(0,1fr);gap:1rem;align-items:start}.mp-cover-preview{display:grid;place-items:center;width:112px;aspect-ratio:4/5;border:1px solid var(--mp-border);border-radius:10px;background:var(--mp-soft);overflow:hidden;color:var(--mp-muted)}.mp-cover-preview img{width:100%;height:100%;object-fit:cover}.mp-cover-preview svg{width:25px;height:25px;fill:currentColor}
+    .mp-preview-list{display:grid;gap:.55rem;margin-bottom:.9rem}.mp-preview-item{display:flex;align-items:center;gap:.7rem;border:1px solid var(--mp-border);border-radius:9px;padding:.65rem .75rem}.mp-preview-item svg{width:19px;height:19px;fill:currentColor;color:var(--btcpay-primary,#155eef);flex:none}.mp-preview-main{min-width:0;flex:1}.mp-preview-main strong{display:block;font-size:.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mp-preview-main span{display:block;color:var(--mp-muted);font-size:.7rem}.mp-remove-label{display:flex;align-items:center;gap:.35rem;margin:0;color:var(--btcpay-danger,#b42318);font-size:.75rem;cursor:pointer;white-space:nowrap}
+    .mp-publish-card{position:sticky;top:5.5rem}.mp-status-row{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.7rem 0;border-bottom:1px solid var(--mp-border);font-size:.82rem}.mp-status-row:last-child{border:0}.mp-status-row span:first-child{color:var(--mp-muted)}.mp-status-badge,.mp-health-badge{display:inline-flex;align-items:center;gap:.35rem;border-radius:999px;padding:.28rem .58rem;font-size:.72rem;font-weight:750}.mp-status-badge.is-live{background:rgba(var(--btcpay-success-rgb,18,183,106),.12);color:var(--btcpay-success,#067647)}.mp-status-badge.is-draft{background:var(--mp-soft);color:var(--mp-muted)}.mp-health-badge{background:rgba(var(--btcpay-primary-rgb,21,94,239),.09);color:var(--btcpay-primary,#155eef)}.mp-publish-switch{display:flex;align-items:flex-start;gap:.7rem;padding:.9rem;border:1px solid var(--mp-border);border-radius:10px;background:var(--mp-soft)}.mp-publish-switch .form-check-input{margin-top:.15rem;flex:none}.mp-publish-switch strong{display:block;font-size:.84rem}.mp-publish-switch small{display:block;color:var(--mp-muted);font-size:.73rem;line-height:1.4}
+    .mp-inline-summary{display:flex;align-items:flex-start;gap:.6rem;padding:.75rem;border-radius:9px;background:var(--mp-soft);color:var(--mp-muted);font-size:.77rem;line-height:1.45}.mp-inline-summary svg{width:17px;height:17px;fill:currentColor;flex:none;margin-top:.1rem}.mp-subsection{padding:.95rem;border:1px solid var(--mp-border);border-radius:10px;background:var(--mp-soft)}
+    .mp-submit-overlay[hidden]{display:none}.mp-submit-overlay{position:fixed;z-index:1055;inset:0;display:grid;place-items:center;background:rgba(16,24,40,.62);backdrop-filter:blur(2px)}.mp-submit-dialog{width:min(390px,calc(100vw - 2rem));border-radius:14px;background:var(--mp-surface);padding:1.6rem;text-align:center;box-shadow:0 24px 64px rgba(16,24,40,.28)}.mp-submit-spinner{width:38px;height:38px;margin:0 auto 1rem;border:4px solid var(--mp-border);border-top-color:var(--btcpay-primary,#155eef);border-radius:50%;animation:mp-spin .75s linear infinite}.mp-submit-dialog h3{font-size:1rem;margin:0 0 .3rem}.mp-submit-dialog p{margin:0;color:var(--mp-muted);font-size:.82rem}@@keyframes mp-spin{to{transform:rotate(360deg)}}
+    .mp-type-panel[hidden],.mp-provider-panel[hidden]{display:none!important}
+    @@media(max-width:1199.98px){.mp-type-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.mp-publish-card{position:static}}
+    @@media(max-width:767.98px){.mp-type-grid{grid-template-columns:1fr 1fr}.mp-type-card{min-height:118px}.mp-cover-row{grid-template-columns:80px minmax(0,1fr)}.mp-cover-preview{width:80px}.mp-page-actions{width:100%}.mp-page-actions .btn-primary{flex:1}.mp-preview-item{align-items:flex-start;flex-wrap:wrap}.mp-remove-label{margin-left:1.75rem}.mp-product-editor .mp-card{padding:1rem}}
+    @@media(max-width:419.98px){.mp-type-grid{grid-template-columns:1fr}}
+</style>
+
+<div class="mp-product-editor">
+    <form id="mp-product-form" method="post" enctype="multipart/form-data" asp-action="SaveProduct" asp-route-storeId="@storeId" asp-route-productId="@saveProductId">
+        <div class="sticky-header d-flex justify-content-between align-items-center">
+            <div class="mp-page-heading">
+                <div class="mp-page-kicker"><a asp-action="Index" asp-route-storeId="@storeId">Digital products</a><span aria-hidden="true">/</span><span>@(isNew ? "New product" : "Edit")</span></div>
+                <h2 class="mb-0">@heading</h2>
+            </div>
+            <div class="mp-page-actions">
+                @if (!isNew)
+                {
+                    <a class="btn btn-secondary" target="_blank" rel="noopener" asp-controller="DigitalDownloadsPublic" asp-action="Product" asp-route-storeId="@storeId" asp-route-kind="download" asp-route-productId="@Model.Slug">View product</a>
+                    <button class="btn btn-outline-danger" type="submit" form="mp-delete-product-form" formnovalidate data-confirm-delete>Delete</button>
+                }
+                <a class="btn btn-secondary" asp-action="Index" asp-route-storeId="@storeId">Cancel</a>
+                <button class="btn btn-primary" type="submit" data-save-product><svg class="mp-editor-icon me-1" aria-hidden="true"><use href="/img/icon-sprite.svg#done"></use></svg>Save product</button>
+            </div>
+        </div>
+
+        <partial name="_StatusMessage" />
+        <div asp-validation-summary="All" class="alert alert-danger" role="alert"></div>
+
+        <div class="row g-4">
+            <div class="col-xl-8">
+                <section class="mp-card" aria-labelledby="product-type-title">
+                    <div class="mp-card-head">
+                        <div><h3 id="product-type-title"><span class="mp-section-number">1</span>Choose a product format</h3><p>The format controls storefront previews, delivery options, and customer playback.</p></div>
+                    </div>
+                    <div class="mp-type-grid" role="radiogroup" aria-label="Product format">
+                        <input class="visually-hidden mp-type-input" asp-for="ProductType" type="radio" value="FileDownload" id="type-file" />
+                        <label class="mp-type-card" for="type-file"><span class="mp-type-icon"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#actions-download"></use></svg></span><strong>File download</strong><small>ZIPs, templates, assets, and any protected file.</small></label>
+                        <input class="visually-hidden mp-type-input" asp-for="ProductType" type="radio" value="PdfEbook" id="type-pdf" />
+                        <label class="mp-type-card" for="type-pdf"><span class="mp-type-icon"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#docs"></use></svg></span><strong>PDF / ebook</strong><small>Browser reading, sample pages, and protected download.</small></label>
+                        <input class="visually-hidden mp-type-input" asp-for="ProductType" type="radio" value="Audio" id="type-audio" />
+                        <label class="mp-type-card" for="type-audio"><span class="mp-type-icon"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#payment-receive"></use></svg></span><strong>Music &amp; audio</strong><small>Albums, tracks, podcasts, and audio lessons.</small></label>
+                        <input class="visually-hidden mp-type-input" asp-for="ProductType" type="radio" value="Video" id="type-video" />
+                        <label class="mp-type-card" for="type-video"><span class="mp-type-icon"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#actions-show"></use></svg></span><strong>Video content</strong><small>Courses, tutorials, stock footage, and films.</small></label>
+                        <input class="visually-hidden mp-type-input" asp-for="ProductType" type="radio" value="PhotosArt" id="type-photos" />
+                        <label class="mp-type-card" for="type-photos"><span class="mp-type-icon"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#themes-light"></use></svg></span><strong>Photos &amp; art</strong><small>Photo packs, illustrations, and design assets.</small></label>
+                    </div>
+                    <span asp-validation-for="ProductType" class="text-danger"></span>
+                </section>
+
+                <section class="mp-card" aria-labelledby="listing-title">
+                    <div class="mp-card-head"><div><h3 id="listing-title"><span class="mp-section-number">2</span>Store listing</h3><p>Give customers the details they need to understand and buy this product.</p></div></div>
+                    <div class="form-group">
+                        <label asp-for="Name" class="form-label">Product name</label>
+                        <input asp-for="Name" class="form-control" autocomplete="off" data-product-name />
+                        <span asp-validation-for="Name" class="text-danger"></span>
+                    </div>
+                    <div class="form-group">
+                        <label asp-for="Slug" class="form-label">Product URL</label>
+                        <div class="input-group"><span class="input-group-text">/downloads/products/</span><input asp-for="Slug" class="form-control" autocomplete="off" data-product-slug /></div>
+                        <span class="mp-field-help">Lowercase letters, numbers, and hyphens. Existing links change when this changes.</span>
+                        <span asp-validation-for="Slug" class="text-danger"></span>
+                    </div>
+                    <div class="form-group">
+                        <label asp-for="Description" class="form-label mp-field-label"><span>Description</span><small><span data-description-count>0</span> / 4000</small></label>
+                        <textarea asp-for="Description" rows="7" class="form-control" data-description></textarea>
+                        <span class="mp-field-help">Explain what is included, compatibility, format, and how customers can use it.</span>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-4"><label asp-for="Price" class="form-label">Price</label><input asp-for="Price" class="form-control" inputmode="decimal" /><span asp-validation-for="Price" class="text-danger"></span></div>
+                        <div class="col-md-4"><label asp-for="CompareAtPrice" class="form-label">Compare-at price</label><input asp-for="CompareAtPrice" class="form-control" inputmode="decimal" placeholder="Optional" /><span class="mp-field-help">Shows a crossed-out original price.</span></div>
+                        <div class="col-md-4"><label asp-for="Badge" class="form-label">Product badge</label><input asp-for="Badge" class="form-control" placeholder="Popular" /></div>
+                    </div>
+                </section>
+
+                <section class="mp-card" aria-labelledby="media-details-title">
+                    <div class="mp-card-head"><div><h3 id="media-details-title"><span class="mp-section-number">3</span>Media details</h3><p>Optional structured details appear on the product page and catalog cards.</p></div></div>
+                    <div class="row g-3">
+                        <div class="col-md-6 mp-type-panel" data-types="PdfEbook,Audio,Video,PhotosArt"><label asp-for="Creator" class="form-label" data-creator-label>Creator</label><input asp-for="Creator" class="form-control" placeholder="Author, artist, or instructor" /></div>
+                        <div class="col-md-6 mp-type-panel" data-types="PdfEbook,Audio,Video,PhotosArt"><label asp-for="Edition" class="form-label" data-edition-label>Edition</label><input asp-for="Edition" class="form-control" placeholder="First edition, 2026 release" /></div>
+                        <div class="col-md-4 mp-type-panel" data-types="PdfEbook"><label asp-for="PageCount" class="form-label">Page count</label><input asp-for="PageCount" class="form-control" inputmode="numeric" placeholder="240" /></div>
+                        <div class="col-md-4 mp-type-panel" data-types="Audio,Video"><label asp-for="DurationSeconds" class="form-label">Duration in seconds</label><input asp-for="DurationSeconds" class="form-control" inputmode="numeric" placeholder="3600" /><span class="mp-field-help" data-duration-preview></span></div>
+                        <div class="col-md-4 mp-type-panel" data-types="PhotosArt"><label asp-for="AssetCount" class="form-label">Files in pack</label><input asp-for="AssetCount" class="form-control" inputmode="numeric" placeholder="24" /></div>
+                        <div class="col-md-8"><label asp-for="MediaDetails" class="form-label" data-media-details-label>Format details</label><input asp-for="MediaDetails" class="form-control" placeholder="ZIP · 1.2 GB · Commercial license" /></div>
+                    </div>
+                </section>
+
+                <section class="mp-card" aria-labelledby="content-title">
+                    <div class="mp-card-head"><div><h3 id="content-title"><span class="mp-section-number">4</span>Protected content</h3><p>The original stays private. Customers receive a tokenized link only after BTCPay confirms payment.</p></div></div>
+                    <div class="row g-3 mb-3 mp-type-panel" data-types="PdfEbook,Audio,Video">
+                        <div class="col-md-6">
+                            <label asp-for="DeliveryMode" class="form-label">Customer access</label>
+                            <select asp-for="DeliveryMode" asp-items="Html.GetEnumSelectList<DigitalDeliveryMode>()" class="form-select" data-delivery-mode></select>
+                            <span class="mp-field-help" data-delivery-help>Choose whether buyers can stream, download, or use both.</span>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label asp-for="StorageKind" class="form-label">Content source</label>
+                        <select asp-for="StorageKind" asp-items="Html.GetEnumSelectList<ProductStorageKind>()" class="form-select" data-storage-kind></select>
+                    </div>
+                    <div class="mp-provider-panel" data-provider="Local">
+                        @if (!string.IsNullOrWhiteSpace(Model.StorageLocation) && Model.StorageKind == ProductStorageKind.Local)
+                        {
+                            <div class="mp-current-file"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#lock"></use></svg><div><strong>@Model.DownloadFileName</strong><span>@(Model.FileSize is { } originalBytes ? DigitalStorefrontBuilder.FormatBytes(originalBytes) : "Size unknown") · protected local file</span></div></div>
+                        }
+                        <div class="mp-upload-zone">
+                            <div class="mp-upload-title"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#actions-download"></use></svg><span>@(string.IsNullOrWhiteSpace(Model.StorageLocation) ? "Upload protected content" : "Replace protected content")</span></div>
+                            <p class="mp-field-help mt-0 mb-2" data-original-file-help>The file is stored outside the public storefront and delivered through an authorized route.</p>
+                            <input type="file" name="upload" class="form-control" data-original-file />
+                            <span class="mp-field-help" data-original-file-name>No new file selected.</span>
+                        </div>
+                    </div>
+                    <div class="mp-provider-panel" data-provider="S3">
+                        <label for="StorageLocationS3" class="form-label">S3 object key</label>
+                        <input asp-for="StorageLocation" id="StorageLocationS3" value="@(Model.StorageKind == ProductStorageKind.S3 ? Model.StorageLocation : null)" class="form-control" placeholder="products/course-master.zip" data-storage-location />
+                        <span class="mp-field-help">Uses the private S3 connection configured in Digital Products settings.</span>
+                    </div>
+                    <div class="mp-provider-panel" data-provider="CustomUrl">
+                        <label for="StorageLocationCustom" class="form-label">Protected source URL</label>
+                        <input asp-for="StorageLocation" id="StorageLocationCustom" value="@(Model.StorageKind == ProductStorageKind.CustomUrl ? Model.StorageLocation : null)" class="form-control" placeholder="https://files.example.com/private/product.zip" data-storage-location />
+                        <span class="mp-field-help">BTCPay fetches this server-side. Private authorization headers can be configured in settings.</span>
+                    </div>
+                    <div class="row g-3 mt-1">
+                        <div class="col-md-6"><label asp-for="DownloadFileName" class="form-label">Customer filename</label><input asp-for="DownloadFileName" class="form-control" placeholder="my-product.zip" /><span class="mp-field-help">Used when the customer downloads the original.</span></div>
+                        <div class="col-md-6"><label asp-for="ContentType" class="form-label">Content type</label><input asp-for="ContentType" class="form-control font-monospace" placeholder="application/zip" data-content-type /><span class="mp-field-help">Required for browser streaming and remote sources.</span></div>
+                        <div class="col-md-6"><label asp-for="FileSize" class="form-label">File size in bytes</label><input asp-for="FileSize" class="form-control" inputmode="numeric" placeholder="Detected for local uploads" /><span class="mp-field-help">Optional for remote content; helps validate range requests.</span></div>
+                    </div>
+                </section>
+
+                <section class="mp-card" aria-labelledby="preview-title">
+                    <div class="mp-card-head"><div><h3 id="preview-title"><span class="mp-section-number">5</span>Public preview</h3><p data-preview-description>Add an optional sample so customers can evaluate the product before buying.</p></div></div>
+                    <div class="mp-publish-switch mb-3">
+                        <input asp-for="PreviewEnabled" class="form-check-input" data-preview-enabled />
+                        <label asp-for="PreviewEnabled"><strong>Show a public preview</strong><small data-preview-switch-help>Preview files are public and should never contain the full paid product.</small></label>
+                    </div>
+                    <div data-preview-settings>
+                        <div class="form-group"><label asp-for="PreviewHeading" class="form-label">Preview heading</label><input asp-for="PreviewHeading" class="form-control" placeholder="Listen to a sample" /></div>
+                        @if (Model.PreviewAssets.Count > 0)
+                        {
+                            <div class="mp-preview-list" aria-label="Existing preview files">
+                                @foreach (var asset in Model.PreviewAssets.OrderBy(asset => asset.SortOrder))
+                                {
+                                    <div class="mp-preview-item">
+                                        <svg aria-hidden="true"><use href="/img/icon-sprite.svg#actions-show"></use></svg>
+                                        <div class="mp-preview-main"><strong>@asset.FileName</strong><span>@asset.Label · @(asset.FileSize is { } previewBytes ? DigitalStorefrontBuilder.FormatBytes(previewBytes) : "Size unknown")@(asset.Watermarked ? " · watermark baked in" : "")</span></div>
+                                        <label class="mp-remove-label"><input type="checkbox" class="form-check-input preview-remove" value="@asset.Id" /> Remove</label>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        <input type="hidden" name="removePreviewAssetIds" data-remove-preview-ids />
+                        <div class="mp-upload-zone">
+                            <div class="mp-upload-title"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#actions-add"></use></svg><span data-preview-upload-title>Upload preview</span></div>
+                            <p class="mp-field-help mt-0 mb-2" data-preview-upload-help>Upload one public sample up to 95 MB.</p>
+                            <input type="file" name="previewUploads" class="form-control" data-preview-upload />
+                            <span class="mp-field-help" data-preview-file-summary>No preview selected.</span>
+                        </div>
+                        <div class="mp-subsection mt-3 mp-type-panel" data-types="PhotosArt">
+                            <h4 class="h6 mb-1">Photo preview protection</h4>
+                            <p class="mp-field-help mt-0">Images are resized in this browser and saved as new preview files. Originals are never changed.</p>
+                            <div class="form-check mb-3"><input asp-for="WatermarkPreviews" class="form-check-input" data-watermark-enabled /><label asp-for="WatermarkPreviews" class="form-check-label">Bake a repeated watermark into previews</label></div>
+                            <div class="row g-3">
+                                <div class="col-md-12" data-watermark-field><label asp-for="WatermarkText" class="form-label">Watermark text</label><input asp-for="WatermarkText" class="form-control" placeholder="PREVIEW" data-watermark-text /></div>
+                                <div class="col-md-6"><label asp-for="PreviewMaxWidth" class="form-label">Maximum width</label><input asp-for="PreviewMaxWidth" class="form-control" inputmode="numeric" data-preview-max-width /><span class="mp-field-help">320–4096 px</span></div>
+                                <div class="col-md-6"><label asp-for="PreviewQuality" class="form-label">WebP quality</label><input asp-for="PreviewQuality" class="form-control" inputmode="numeric" data-preview-quality /><span class="mp-field-help">40–100</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="mp-card" aria-labelledby="cover-title">
+                    <div class="mp-card-head"><div><h3 id="cover-title"><span class="mp-section-number">6</span>Product cover</h3><p>A sharp portrait or square cover helps the product stand out in the catalog.</p></div></div>
+                    <div class="mp-cover-row">
+                        <div class="mp-cover-preview" data-cover-preview>
+                            @if (!string.IsNullOrWhiteSpace(imagePreviewUrl)) { <img src="@imagePreviewUrl" alt="Current cover for @Model.Name" /> }
+                            else { <svg aria-hidden="true"><use href="/img/icon-sprite.svg#nav-products"></use></svg> }
+                        </div>
+                        <div>
+                            <div class="form-group"><label class="form-label" for="cover-upload">Upload cover image</label><input id="cover-upload" type="file" name="coverUpload" class="form-control" accept="image/png,image/jpeg,image/webp,image/gif" data-cover-upload /><span class="mp-field-help">PNG, JPEG, WebP, or GIF up to 10 MB.</span></div>
+                            <div class="form-group mb-0"><label asp-for="ImageUrl" class="form-label">Or use an external image URL</label><input asp-for="ImageUrl" class="form-control" placeholder="https://example.com/cover.jpg" /><span asp-validation-for="ImageUrl" class="text-danger"></span></div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <aside class="col-xl-4" aria-label="Publishing and delivery settings">
+                <section class="mp-card mp-publish-card">
+                    <div class="mp-card-head"><div><h3>Publish</h3><p>Control visibility and protected-link policy.</p></div><span class="mp-status-badge @(Model.Active ? "is-live" : "is-draft")" data-publish-badge>@(Model.Active ? "Published" : "Draft")</span></div>
+                    <div class="mp-publish-switch mb-3">
+                        <input asp-for="Active" class="form-check-input" data-published />
+                        <label asp-for="Active"><strong>Available in storefront</strong><small>Draft products remain available to admins but cannot be purchased.</small></label>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-6"><label asp-for="DownloadLimit" class="form-label">Download limit</label><input asp-for="DownloadLimit" class="form-control" inputmode="numeric" placeholder="Store default" /></div>
+                        <div class="col-6"><label asp-for="LinkHours" class="form-label">Link lifetime</label><div class="input-group"><input asp-for="LinkHours" class="form-control" inputmode="numeric" placeholder="Default" /><span class="input-group-text">hours</span></div></div>
+                    </div>
+                    <div class="mp-form-divider"></div>
+                    <div class="mp-status-row"><span>Format</span><strong data-format-summary>@DigitalStorefrontBuilder.ProductTypeLabel(Model.ProductType)</strong></div>
+                    <div class="mp-status-row"><span>Delivery</span><strong data-delivery-summary>@DigitalStorefrontBuilder.DeliveryLabel(Model)</strong></div>
+                    <div class="mp-status-row"><span>Content</span><span class="mp-health-badge" data-content-health>@(string.IsNullOrWhiteSpace(Model.StorageLocation) ? "File required" : "Configured")</span></div>
+                    <div class="mp-status-row"><span>Public preview</span><strong data-preview-summary>@(Model.PreviewEnabled && Model.PreviewAssets.Count > 0 ? $"{Model.PreviewAssets.Count} active" : "Off")</strong></div>
+                    <div class="mp-inline-summary mt-3"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#lock"></use></svg><span>Original files are not exposed in public HTML. Paid access is enforced by time-limited, revocable delivery tokens.</span></div>
+                    <button class="btn btn-primary w-100 mt-3" type="submit" data-save-product><svg class="mp-editor-icon me-1" aria-hidden="true"><use href="/img/icon-sprite.svg#done"></use></svg>Save product</button>
+                </section>
+            </aside>
+        </div>
+    </form>
+
+    @if (!isNew)
+    {
+        <form id="mp-delete-product-form" method="post" asp-action="DeleteProduct" asp-route-storeId="@storeId" asp-route-productId="@Model.Id"></form>
+    }
+
+    <div class="mp-submit-overlay" data-submit-overlay hidden aria-live="polite" aria-busy="true">
+        <div class="mp-submit-dialog" role="status"><div class="mp-submit-spinner" aria-hidden="true"></div><h3 data-submit-title>Saving product…</h3><p data-submit-copy>Securely processing uploads and product settings.</p></div>
+    </div>
+</div>
+
+<script>
+(() => {
+    const form = document.getElementById('mp-product-form');
+    if (!form) return;
+    const typeInputs = [...form.querySelectorAll('.mp-type-input')];
+    const storage = form.querySelector('[data-storage-kind]');
+    const previewEnabled = form.querySelector('[data-preview-enabled]');
+    const previewSettings = form.querySelector('[data-preview-settings]');
+    const previewUpload = form.querySelector('[data-preview-upload]');
+    const watermarkEnabled = form.querySelector('[data-watermark-enabled]');
+    const overlay = document.querySelector('[data-submit-overlay]');
+    const originalFile = form.querySelector('[data-original-file]');
+    const contentType = form.querySelector('[data-content-type]');
+    const deliveryMode = form.querySelector('[data-delivery-mode]');
+    let processing = false;
+
+    const currentType = () => typeInputs.find(input => input.checked)?.value || 'FileDownload';
+    const typeCopy = {
+        FileDownload: { label: 'File download', preview: 'Upload one public PDF or image sample up to 95 MB.', accept: '.pdf,image/png,image/jpeg,image/webp', upload: 'Upload product sample', details: 'ZIP · 1.2 GB · Commercial license', creator: 'Creator', edition: 'Version' },
+        PdfEbook: { label: 'PDF / ebook', preview: 'Upload one sample PDF up to 95 MB for the page-turning reader.', accept: '.pdf,application/pdf', upload: 'Upload preview PDF', details: 'PDF · EPUB included · ISBN', creator: 'Author', edition: 'Edition' },
+        Audio: { label: 'Music & audio', preview: 'Upload one MP3, WAV, FLAC, OGG, MP4 audio, or WebM demo up to 95 MB.', accept: 'audio/mpeg,audio/wav,audio/flac,audio/ogg,audio/mp4,audio/webm,.mp3,.wav,.flac,.ogg,.m4a,.webm', upload: 'Upload audio demo', details: 'MP3 + WAV · 24-bit · 44.1 kHz', creator: 'Artist / creator', edition: 'Release' },
+        Video: { label: 'Video content', preview: 'Upload one MP4, WebM, or OGG trailer up to 95 MB.', accept: 'video/mp4,video/webm,video/ogg,.mp4,.webm,.ogv', upload: 'Upload video trailer', details: 'MP4 · 4K · H.264', creator: 'Instructor / creator', edition: 'Release' },
+        PhotosArt: { label: 'Photos & art', preview: 'Upload up to 12 JPEG, PNG, or WebP images. They will be resized before upload.', accept: 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp', upload: 'Upload preview gallery', details: '24 high-resolution JPG files · 6000 × 4000 px', creator: 'Artist / creator', edition: 'Collection' }
+    };
+
+    function updateTypeUI() {
+        const type = currentType();
+        const copy = typeCopy[type];
+        form.querySelectorAll('[data-types]').forEach(panel => {
+            const visible = panel.dataset.types.split(',').includes(type);
+            panel.hidden = !visible;
+            panel.querySelectorAll('input,select,textarea').forEach(control => control.disabled = !visible);
+        });
+        if (previewUpload) {
+            previewUpload.accept = copy.accept;
+            previewUpload.multiple = type === 'PhotosArt';
+        }
+        const uploadTitle = form.querySelector('[data-preview-upload-title]');
+        const uploadHelp = form.querySelector('[data-preview-upload-help]');
+        const formatSummary = form.querySelector('[data-format-summary]');
+        const mediaLabel = form.querySelector('[data-media-details-label]');
+        const creatorLabel = form.querySelector('[data-creator-label]');
+        const editionLabel = form.querySelector('[data-edition-label]');
+        if (uploadTitle) uploadTitle.textContent = copy.upload;
+        if (uploadHelp) uploadHelp.textContent = copy.preview;
+        if (formatSummary) formatSummary.textContent = copy.label;
+        if (mediaLabel) mediaLabel.textContent = type === 'FileDownload' ? 'File details' : 'Format details';
+        if (creatorLabel) creatorLabel.textContent = copy.creator;
+        if (editionLabel) editionLabel.textContent = copy.edition;
+        const details = form.querySelector('[name="MediaDetails"]');
+        if (details) details.placeholder = copy.details;
+        if (type === 'FileDownload' || type === 'PhotosArt') {
+            if (deliveryMode) deliveryMode.value = '0';
+        }
+        updateDeliverySummary();
+        updateOriginalAccept();
+        updateHealth();
+    }
+
+    function updateStorageUI() {
+        const value = storage?.options[storage.selectedIndex]?.text?.replace(/\s/g, '') || storage?.value || 'Local';
+        const normalized = value.includes('Custom') ? 'CustomUrl' : value.includes('S3') ? 'S3' : 'Local';
+        form.querySelectorAll('[data-provider]').forEach(panel => {
+            const visible = panel.dataset.provider === normalized;
+            panel.hidden = !visible;
+            panel.querySelectorAll('input,select,textarea').forEach(control => control.disabled = !visible);
+        });
+        updateHealth();
+    }
+
+    function updatePreviewUI() {
+        const enabled = !!previewEnabled?.checked;
+        if (previewSettings) {
+            previewSettings.style.opacity = enabled ? '1' : '.58';
+            previewSettings.querySelectorAll('input,select,textarea').forEach(control => {
+                if (control.classList.contains('preview-remove')) return;
+                control.disabled = !enabled || (control.closest('[data-types]')?.hidden ?? false);
+            });
+        }
+        updateWatermarkUI();
+        updatePreviewSummary();
+    }
+
+    function updateWatermarkUI() {
+        form.querySelectorAll('[data-watermark-field]').forEach(field => {
+            field.style.opacity = watermarkEnabled?.checked ? '1' : '.55';
+            field.querySelectorAll('input').forEach(input => input.disabled = !previewEnabled?.checked || !watermarkEnabled?.checked);
+        });
+    }
+
+    function updatePreviewSummary() {
+        const existing = [...form.querySelectorAll('.preview-remove')].filter(input => !input.checked).length;
+        const added = previewUpload?.files?.length || 0;
+        const summary = form.querySelector('[data-preview-summary]');
+        if (summary) summary.textContent = previewEnabled?.checked && existing + added > 0 ? `${existing + added} active` : 'Off';
+        const fileSummary = form.querySelector('[data-preview-file-summary]');
+        if (fileSummary) fileSummary.textContent = added ? `${added} new ${added === 1 ? 'file' : 'files'} selected.` : 'No new preview selected.';
+    }
+
+    function updateRemoveIds() {
+        const ids = [...form.querySelectorAll('.preview-remove:checked')].map(input => input.value);
+        const target = form.querySelector('[data-remove-preview-ids]');
+        if (target) target.value = ids.join(',');
+        updatePreviewSummary();
+    }
+
+    function updateOriginalAccept() {
+        if (!originalFile) return;
+        const type = currentType();
+        originalFile.accept = type === 'PdfEbook' ? '.pdf,application/pdf' : type === 'Audio' ? 'audio/*,.mp3,.wav,.flac,.ogg,.m4a,.webm' : type === 'Video' ? 'video/*,.mp4,.webm,.ogv' : type === 'PhotosArt' ? '.zip,application/zip,application/x-zip-compressed' : '';
+    }
+
+    function updateDeliverySummary() {
+        const target = form.querySelector('[data-delivery-summary]');
+        if (target) target.textContent = deliveryMode?.selectedOptions?.[0]?.textContent?.trim() || 'Download only';
+    }
+
+    function updateHealth() {
+        const target = form.querySelector('[data-content-health]');
+        if (!target) return;
+        const localConfigured = @Json.Serialize(!string.IsNullOrWhiteSpace(Model.StorageLocation)) || (originalFile?.files?.length || 0) > 0;
+        const remoteLocation = [...form.querySelectorAll('[data-storage-location]:not(:disabled)')][0]?.value?.trim();
+        target.textContent = localConfigured || remoteLocation ? 'Configured' : 'File required';
+    }
+
+    function updateDuration() {
+        const input = form.querySelector('[name="DurationSeconds"]');
+        const target = form.querySelector('[data-duration-preview]');
+        const seconds = Number(input?.value || 0);
+        if (!target) return;
+        if (!seconds) { target.textContent = ''; return; }
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        const remaining = seconds % 60;
+        target.textContent = [hours ? `${hours}h` : '', minutes ? `${minutes}m` : '', remaining ? `${remaining}s` : ''].filter(Boolean).join(' ');
+    }
+
+    function updateDescriptionCount() {
+        const input = form.querySelector('[data-description]');
+        const target = form.querySelector('[data-description-count]');
+        if (target) target.textContent = String(input?.value?.length || 0);
+    }
+
+    function slugify(value) {
+        return value.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
+    }
+
+    async function loadImage(file) {
+        if ('createImageBitmap' in window) return await createImageBitmap(file);
+        return await new Promise((resolve, reject) => {
+            const image = new Image();
+            image.onload = () => { URL.revokeObjectURL(image.src); resolve(image); };
+            image.onerror = reject;
+            image.src = URL.createObjectURL(file);
+        });
+    }
+
+    async function preparePhotoPreviews() {
+        if (currentType() !== 'PhotosArt' || !previewEnabled?.checked || !previewUpload?.files?.length) return;
+        const maxWidth = Math.min(4096, Math.max(320, Number(form.querySelector('[data-preview-max-width]')?.value || 1600)));
+        const quality = Math.min(1, Math.max(.4, Number(form.querySelector('[data-preview-quality]')?.value || 82) / 100));
+        const watermark = !!watermarkEnabled?.checked;
+        const watermarkText = form.querySelector('[data-watermark-text]')?.value?.trim() || 'PREVIEW';
+        const output = new DataTransfer();
+        const sourceFiles = [...previewUpload.files];
+        for (let index = 0; index < sourceFiles.length; index++) {
+            const source = sourceFiles[index];
+            if (source.size > 95 * 1024 * 1024) throw new Error(`${source.name} is larger than the 95 MB preview limit.`);
+            const image = await loadImage(source);
+            const sourceWidth = image.width || image.naturalWidth;
+            const sourceHeight = image.height || image.naturalHeight;
+            const width = Math.min(maxWidth, sourceWidth);
+            const height = Math.max(1, Math.round(sourceHeight * (width / sourceWidth)));
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const context = canvas.getContext('2d', { alpha: false });
+            context.fillStyle = '#ffffff';
+            context.fillRect(0, 0, width, height);
+            context.drawImage(image, 0, 0, width, height);
+            if (watermark) {
+                const fontSize = Math.max(18, Math.round(width / 18));
+                const gapX = Math.max(220, Math.round(width / 3.4));
+                const gapY = Math.max(160, Math.round(height / 4));
+                context.save();
+                context.translate(width / 2, height / 2);
+                context.rotate(-Math.PI / 6);
+                context.translate(-width / 2, -height / 2);
+                context.font = `700 ${fontSize}px system-ui, sans-serif`;
+                context.textAlign = 'center';
+                context.textBaseline = 'middle';
+                context.fillStyle = 'rgba(255,255,255,.45)';
+                context.strokeStyle = 'rgba(16,24,40,.25)';
+                context.lineWidth = Math.max(1, fontSize / 30);
+                for (let y = -height; y < height * 2; y += gapY) {
+                    for (let x = -width; x < width * 2; x += gapX) {
+                        context.strokeText(watermarkText, x, y);
+                        context.fillText(watermarkText, x, y);
+                    }
+                }
+                context.restore();
+            }
+            const blob = await new Promise((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('Could not create the protected preview.')), 'image/webp', quality));
+            const baseName = source.name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]+/g, '-').slice(0, 80) || `preview-${index + 1}`;
+            output.items.add(new File([blob], `${baseName}-${watermark ? 'watermarked' : 'scaled'}.webp`, { type: 'image/webp', lastModified: Date.now() }));
+            if (typeof image.close === 'function') image.close();
+        }
+        previewUpload.files = output.files;
+    }
+
+    function showOverlay(title, copy) {
+        if (!overlay) return;
+        overlay.querySelector('[data-submit-title]').textContent = title;
+        overlay.querySelector('[data-submit-copy]').textContent = copy;
+        overlay.hidden = false;
+        document.body.style.overflow = 'hidden';
+    }
+
+    typeInputs.forEach(input => input.addEventListener('change', updateTypeUI));
+    storage?.addEventListener('change', updateStorageUI);
+    deliveryMode?.addEventListener('change', updateDeliverySummary);
+    previewEnabled?.addEventListener('change', updatePreviewUI);
+    watermarkEnabled?.addEventListener('change', updateWatermarkUI);
+    previewUpload?.addEventListener('change', updatePreviewSummary);
+    originalFile?.addEventListener('change', () => {
+        const summary = form.querySelector('[data-original-file-name]');
+        if (summary) summary.textContent = originalFile.files?.[0] ? `${originalFile.files[0].name} selected.` : 'No new file selected.';
+        if (originalFile.files?.[0] && contentType && (!contentType.value || contentType.value === 'application/octet-stream')) contentType.value = originalFile.files[0].type || 'application/octet-stream';
+        updateHealth();
+    });
+    form.querySelectorAll('.preview-remove').forEach(input => input.addEventListener('change', updateRemoveIds));
+    form.querySelector('[name="DurationSeconds"]')?.addEventListener('input', updateDuration);
+    form.querySelector('[data-description]')?.addEventListener('input', updateDescriptionCount);
+    form.querySelector('[data-published]')?.addEventListener('change', event => {
+        const badge = form.querySelector('[data-publish-badge]');
+        badge.textContent = event.currentTarget.checked ? 'Published' : 'Draft';
+        badge.classList.toggle('is-live', event.currentTarget.checked);
+        badge.classList.toggle('is-draft', !event.currentTarget.checked);
+    });
+    form.querySelector('[data-cover-upload]')?.addEventListener('change', event => {
+        const file = event.currentTarget.files?.[0];
+        const target = form.querySelector('[data-cover-preview]');
+        if (!file || !target) return;
+        const reader = new FileReader();
+        reader.onload = () => { target.innerHTML = ''; const image = new Image(); image.alt = 'New product cover preview'; image.src = reader.result; target.appendChild(image); };
+        reader.readAsDataURL(file);
+    });
+    const nameInput = form.querySelector('[data-product-name]');
+    const slugInput = form.querySelector('[data-product-slug]');
+    let slugWasEdited = !@Json.Serialize(isNew) || (slugInput?.value && slugInput.value !== 'new-product');
+    slugInput?.addEventListener('input', () => { slugWasEdited = true; });
+    nameInput?.addEventListener('input', () => { if (!slugWasEdited && slugInput) slugInput.value = slugify(nameInput.value) || 'new-product'; });
+    document.querySelector('[data-confirm-delete]')?.addEventListener('click', event => {
+        if (!window.confirm('Delete this product from the catalog? Paid orders with protected snapshots will keep their access.')) event.preventDefault();
+        else showOverlay('Removing product…', 'Checking existing customer access before removal.');
+    });
+
+    form.addEventListener('submit', async event => {
+        if (processing) { event.preventDefault(); return; }
+        if (!form.checkValidity()) return;
+        event.preventDefault();
+        processing = true;
+        form.querySelectorAll('[type="submit"]').forEach(button => button.disabled = true);
+        showOverlay(currentType() === 'PhotosArt' && previewUpload?.files?.length ? 'Preparing photo previews…' : 'Saving product…', currentType() === 'PhotosArt' && previewUpload?.files?.length ? 'Resizing images and baking the watermark before secure upload.' : 'Securely processing uploads and product settings.');
+        try {
+            await preparePhotoPreviews();
+            updateRemoveIds();
+            form.submit();
+        } catch (error) {
+            processing = false;
+            form.querySelectorAll('[type="submit"]').forEach(button => button.disabled = false);
+            if (overlay) overlay.hidden = true;
+            document.body.style.overflow = '';
+            window.alert(error?.message || 'The preview images could not be prepared. Please try again.');
+        }
+    });
+
+    updateTypeUI();
+    updateStorageUI();
+    updatePreviewUI();
+    updateRemoveIds();
+    updateDuration();
+    updateDescriptionCount();
+})();
+</script>

@@ -21,7 +21,12 @@ public sealed class DigitalCheckoutService
             CompareAtPrice = product.CompareAtPrice,
             Badge = product.Badge,
             ImageUrl = product.ImageUrl,
-            Meta = "Protected download · Expiring private link"
+            ProductType = product.ProductType,
+            DeliveryMode = product.DeliveryMode,
+            HasPreview = product.PreviewEnabled && product.PreviewAssets.Count > 0,
+            PreviewCount = product.PreviewEnabled ? product.PreviewAssets.Count : 0,
+            DigitalProductSnapshot = DigitalProductSnapshot.From(product),
+            Meta = DigitalStorefrontBuilder.ProductMeta(product)
         }).Concat(licenses.Where(product => product.Active).Select(product => new StoreProductViewModel
         {
             Kind = DigitalProductKind.License,
@@ -59,7 +64,8 @@ public sealed class DigitalCheckoutService
             Description = line.Product.Description,
             ImageUrl = line.Product.ImageUrl,
             Quantity = line.Quantity,
-            UnitPrice = line.Product.Price
+            UnitPrice = line.Product.Price,
+            DigitalProductSnapshot = line.Product.Kind == DigitalProductKind.Download ? line.Product.DigitalProductSnapshot : null
         }).ToList(),
         Total = lines.Sum(line => line.Total),
         ReservationExpiresAt = DateTimeOffset.UtcNow.AddMinutes(30)

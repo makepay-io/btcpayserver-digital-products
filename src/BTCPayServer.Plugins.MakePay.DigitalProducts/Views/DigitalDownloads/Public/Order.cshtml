@@ -1,7 +1,83 @@
 @model OrderViewModel
-@{ Layout = null; }
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="@((Model.Order.Status == DigitalOrderStatus.Pending) ? "10" : "")"><title>Your order</title><partial name="~/Views/DigitalDownloads/Public/_Theme.cshtml" model="Model.Settings" /></head><body class="dp-public"><main class="dp-auth-shell"><section class="dp-auth-card"><a class="dp-topbar-brand" href="javascript:history.back()">@Model.Settings.StorefrontTitle</a><p class="dp-eyebrow">Protected delivery</p><h1>@Model.Product.Name</h1>
-@if(Model.Order.Status == DigitalOrderStatus.Paid && Model.DownloadUrl is not null){<p>Payment received. Your protected download is ready.</p><p><a class="dp-primary" style="width:100%" href="@Model.DownloadUrl">Download file</a></p><p class="dp-auth-help">@Model.Order.DownloadCount of @Model.Order.MaxDownloads downloads used. Link expires @Model.Order.ExpiresAt?.ToString("u").</p>}
-else if(Model.Order.Status == DigitalOrderStatus.Revoked){<div class="dp-alert">This download has been revoked. Contact the merchant if you need help.</div>}
-else {<div class="dp-spinner"></div><p>We are waiting for payment confirmation. This page refreshes automatically.</p><p class="dp-auth-help">Order @Model.Order.Id[..8]</p>}
-</section></main></body></html>
+@{
+    Layout = null;
+    var storeId = Context.Request.RouteValues["storeId"]?.ToString() ?? "";
+    var waiting = Model.Order.Status == DigitalOrderStatus.Pending;
+    var expired = Model.Order.ExpiresAt is { } expiresAt && expiresAt <= DateTimeOffset.UtcNow;
+    var typeLabel = DigitalStorefrontBuilder.ProductTypeLabel(Model.Product.ProductType);
+    var mediaScriptUrl = Url.Action("Asset", "DigitalDownloadsAssets", new { storeId, fileName = "makepay-media.js" });
+    var pdfLibraryUrl = Url.Action("Asset", "DigitalDownloadsAssets", new { storeId, fileName = "pdf.min.mjs" });
+    var pdfWorkerUrl = Url.Action("Asset", "DigitalDownloadsAssets", new { storeId, fileName = "pdf.worker.min.mjs" });
+    var productImage = Model.Product.ImageUrl ?? Url.Action("ProductAsset", "DigitalDownloadsPublic", new
+    {
+        storeId,
+        kind = Model.Product.ProductType switch
+        {
+            DigitalProductType.PdfEbook => "ebook",
+            DigitalProductType.Audio => "audio",
+            DigitalProductType.Video => "video",
+            DigitalProductType.PhotosArt => "photo",
+            _ => "download"
+        }
+    });
+    var downloadLabel = Model.Product.ProductType switch
+    {
+        DigitalProductType.PdfEbook => "Download PDF",
+        DigitalProductType.Audio => "Download audio",
+        DigitalProductType.Video => "Download video",
+        DigitalProductType.PhotosArt => "Download asset pack",
+        _ => "Download file"
+    };
+}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="referrer" content="no-referrer">
+    @if(waiting){<meta http-equiv="refresh" content="10">}
+    <title>@Model.Product.Name · @Model.Settings.StorefrontTitle</title>
+    <partial name="~/Views/DigitalDownloads/Public/_Theme.cshtml" model="Model.Settings" />
+    <style>
+        .dp-order-shell{min-height:100vh;padding:30px 18px;background:var(--dp-soft)}.dp-order-card{width:min(100%,940px);margin:0 auto;border:1px solid var(--dp-border);border-radius:20px;background:var(--dp-surface);padding:clamp(24px,5vw,48px);box-shadow:0 22px 60px rgba(16,24,40,.1)}.dp-order-card .dp-topbar-brand{display:inline-flex;margin-bottom:34px}.dp-order-header{margin-bottom:26px}.dp-order-header h1{margin:0;font-size:clamp(2rem,5vw,3.5rem);line-height:1;letter-spacing:-.045em}.dp-order-header>p:not(.dp-eyebrow){max-width:660px;color:var(--dp-muted)}.dp-order-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:20px}.dp-order-player{margin-top:24px}.dp-order-player audio{width:100%;accent-color:var(--dp-accent)}.dp-order-player video{display:block;width:100%;max-height:560px;border-radius:14px;background:#080f1d}.dp-order-help{margin-top:20px;padding-top:18px;border-top:1px solid var(--dp-border);color:var(--dp-muted);font-size:.82rem}.dp-order-card .dp-pdf-stage{min-height:480px}
+        @@media(max-width:600px){.dp-order-card{padding:24px 18px}.dp-order-actions{align-items:stretch;flex-direction:column}.dp-order-actions>*{width:100%}.dp-order-card .dp-pdf-stage{min-height:380px}}
+    </style>
+</head>
+<body class="dp-public">
+<main class="dp-order-shell"><section class="dp-order-card">
+    <a class="dp-topbar-brand" asp-action="Storefront" asp-route-storeId="@storeId">@Model.Settings.StorefrontTitle</a>
+    <header class="dp-order-header"><p class="dp-eyebrow">@typeLabel · Protected delivery</p><h1>@Model.Product.Name</h1></header>
+    @if(Model.Order.Status == DigitalOrderStatus.Paid && !expired)
+    {
+        <p>Payment received. Your digital product is ready.</p>
+        @if(Model.StreamUrl is not null && Model.Product.ProductType == DigitalProductType.PdfEbook)
+        {
+            <div class="dp-order-player"><div class="dp-pdf-reader" data-pdf-reader data-source="@Model.StreamUrl" data-library="@pdfLibraryUrl" data-worker="@pdfWorkerUrl" tabindex="0" aria-label="@Model.Product.Name ebook reader"><div class="dp-pdf-toolbar"><div class="dp-pdf-toolbar-group"><button type="button" data-pdf-previous aria-label="Previous page">Previous</button><label class="dp-pdf-page-count">Page <input class="dp-pdf-page-input" type="number" value="1" min="1" data-pdf-page aria-label="Page number"> of <span data-pdf-total>—</span></label><button type="button" data-pdf-next aria-label="Next page">Next</button></div><div class="dp-pdf-toolbar-group"><button type="button" data-pdf-zoom-out aria-label="Zoom out">Zoom out</button><span class="dp-pdf-zoom-value" data-pdf-zoom-value>100%</span><button type="button" data-pdf-zoom-in aria-label="Zoom in">Zoom in</button></div><div class="dp-pdf-toolbar-group"><button type="button" data-pdf-fullscreen>Full screen</button></div></div><div class="dp-pdf-stage" data-pdf-stage><canvas role="img" aria-label="Current ebook page">Your browser does not support the PDF reader canvas.</canvas></div><p class="dp-pdf-status" data-pdf-status aria-live="polite"><span data-pdf-status-text>Opening your ebook…</span><a class="dp-pdf-fallback" data-pdf-fallback href="@Model.StreamUrl" target="_blank" rel="noopener noreferrer" hidden>Open PDF directly</a></p></div></div>
+        }
+        else if(Model.StreamUrl is not null && Model.Product.ProductType == DigitalProductType.Audio)
+        {
+            <div class="dp-order-player"><audio controls preload="metadata"><source src="@Model.StreamUrl" type="@Model.Product.ContentType">Your browser does not support audio playback.</audio></div>
+        }
+        else if(Model.StreamUrl is not null && Model.Product.ProductType == DigitalProductType.Video)
+        {
+            <div class="dp-order-player"><video controls playsinline preload="metadata" poster="@productImage"><source src="@Model.StreamUrl" type="@Model.Product.ContentType">Your browser does not support video playback.</video></div>
+        }
+        <div class="dp-order-actions">@if(Model.DownloadUrl is not null){<a class="dp-primary" href="@Model.DownloadUrl">@downloadLabel</a>}<a class="dp-secondary" asp-action="Account" asp-route-storeId="@storeId">Open purchase library</a></div>
+        <p class="dp-order-help">@if(Model.Product.DeliveryMode != DigitalDeliveryMode.Stream){<span>@Model.Order.DownloadCount of @Model.Order.MaxDownloads downloads used. </span>}@if(Model.Order.ExpiresAt is not null){<span>Access expires @Model.Order.ExpiresAt.Value.ToString("d MMM yyyy, HH:mm 'UTC'").</span>}</p>
+    }
+    else if(Model.Order.Status == DigitalOrderStatus.Revoked)
+    {
+        <div class="dp-alert">This product access has been revoked. Contact the merchant if you need help.</div>
+    }
+    else if(expired)
+    {
+        <div class="dp-alert">This delivery link has expired. Sign in to your purchase library or contact the merchant if you need renewed access.</div><div class="dp-order-actions"><a class="dp-primary" asp-action="Account" asp-route-storeId="@storeId">Open purchase library</a><a class="dp-secondary" asp-action="Storefront" asp-route-storeId="@storeId">Return to shop</a></div>
+    }
+    else
+    {
+        <div class="dp-spinner"></div><p>We are waiting for payment confirmation. This page refreshes automatically.</p><p class="dp-auth-help">Order @Model.Order.Id[..8]</p>
+    }
+</section></main>
+<script src="@mediaScriptUrl" defer></script>
+</body>
+</html>

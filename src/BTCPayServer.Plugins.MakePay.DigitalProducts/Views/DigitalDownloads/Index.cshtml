@@ -1,34 +1,178 @@
 @model DigitalDownloadsDashboardViewModel
 @inject DisplayFormatter DisplayFormatter
-@{ ViewData.SetActivePage("DigitalDownloads", "Digital Products", "Downloads"); }
-<div class="sticky-header d-flex justify-content-between align-items-center">
-    <div><h2 class="mb-0">Digital Products</h2><div class="text-muted">Downloads</div></div>
-    <div class="d-flex gap-2">
-        <a class="btn btn-secondary" target="_blank" asp-controller="DigitalDownloadsPublic" asp-action="Storefront" asp-route-storeId="@Model.StoreId">View store</a>
-        <a class="btn btn-secondary" asp-action="Settings" asp-route-storeId="@Model.StoreId">Settings</a>
-        <a class="btn btn-primary" asp-action="Product" asp-route-storeId="@Model.StoreId">Add product</a>
+@{
+    ViewData.SetActivePage("DigitalDownloads", "Digital Products", "Products");
+    var publishedProducts = Model.Products.Count(product => product.Active);
+    var paidOrders = Model.Orders.Count(order => order.Status == DigitalOrderStatus.Paid);
+    var deliveries = Model.Orders.Sum(order => order.DownloadCount);
+    var productsById = Model.Products.ToDictionary(product => product.Id, StringComparer.OrdinalIgnoreCase);
+    var productTypes = Enum.GetValues<DigitalProductType>();
+    string TypeIcon(DigitalProductType type) => type switch
+    {
+        DigitalProductType.FileDownload => "actions-download",
+        DigitalProductType.PdfEbook => "docs",
+        DigitalProductType.Audio => "payment-receive",
+        DigitalProductType.Video => "actions-show",
+        DigitalProductType.PhotosArt => "themes-light",
+        _ => "nav-products"
+    };
+}
+
+<style>
+    .mp-admin-dashboard{--mp-border:var(--btcpay-body-border-light,#d0d5dd);--mp-surface:var(--btcpay-bg-tile,#fff);--mp-soft:var(--btcpay-body-bg-light,#f8fafc);--mp-muted:var(--btcpay-body-text-muted,#667085);--mp-text:var(--btcpay-body-text,#101828);color:var(--mp-text)}
+    .mp-admin-dashboard .sticky-header{gap:1rem;flex-wrap:wrap}.mp-admin-heading p{margin:.25rem 0 0;color:var(--mp-muted);font-size:.85rem}.mp-admin-actions{display:flex;gap:.5rem;flex-wrap:wrap}.mp-admin-icon{width:18px;height:18px;fill:currentColor}
+    .mp-admin-tabs{border-bottom:1px solid var(--mp-border);margin-bottom:1.5rem}.mp-admin-tabs .nav-link{border:0;border-bottom:2px solid transparent;border-radius:0;color:var(--mp-muted);font-weight:650;padding:.7rem .9rem}.mp-admin-tabs .nav-link.active{background:transparent;color:var(--btcpay-primary,#155eef);border-color:var(--btcpay-primary,#155eef)}
+    .mp-stat-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.8rem;margin-bottom:1.5rem}.mp-stat-card{display:flex;align-items:center;gap:.85rem;border:1px solid var(--mp-border);border-radius:11px;background:var(--mp-surface);padding:1rem}.mp-stat-icon{display:grid;place-items:center;width:40px;height:40px;border-radius:9px;background:rgba(var(--btcpay-primary-rgb,21,94,239),.08);color:var(--btcpay-primary,#155eef);flex:none}.mp-stat-icon svg{width:19px;height:19px;fill:currentColor}.mp-stat-copy{min-width:0}.mp-stat-copy span{display:block;color:var(--mp-muted);font-size:.74rem}.mp-stat-copy strong{display:block;font-size:1.3rem;line-height:1.15}
+    .mp-panel{border:1px solid var(--mp-border);border-radius:12px;background:var(--mp-surface);overflow:hidden;margin-bottom:1.5rem}.mp-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:1rem 1.1rem;border-bottom:1px solid var(--mp-border)}.mp-panel-head h3{margin:0 0 .2rem;font-size:1rem}.mp-panel-head p{margin:0;color:var(--mp-muted);font-size:.78rem}.mp-panel-tools{display:flex;align-items:center;gap:.55rem;flex-wrap:wrap}.mp-search{position:relative;min-width:230px}.mp-search svg{position:absolute;top:50%;left:.72rem;width:16px;height:16px;fill:currentColor;color:var(--mp-muted);transform:translateY(-50%);pointer-events:none}.mp-search input{padding-left:2.15rem}
+    .mp-type-summary{display:flex;gap:.4rem;flex-wrap:wrap;padding:.85rem 1.1rem;border-bottom:1px solid var(--mp-border);background:var(--mp-soft)}.mp-type-chip{display:inline-flex;align-items:center;gap:.35rem;border:1px solid var(--mp-border);border-radius:999px;background:var(--mp-surface);padding:.3rem .58rem;font-size:.7rem;color:var(--mp-muted)}.mp-type-chip svg{width:14px;height:14px;fill:currentColor;color:var(--btcpay-primary,#155eef)}.mp-type-chip strong{color:var(--mp-text)}
+    .mp-admin-table{margin:0}.mp-admin-table>thead>tr>th{padding:.72rem 1rem;border-bottom:1px solid var(--mp-border);background:var(--mp-soft);color:var(--mp-muted);font-size:.68rem;letter-spacing:.055em;text-transform:uppercase;white-space:nowrap}.mp-admin-table>tbody>tr>td{padding:.8rem 1rem;vertical-align:middle}.mp-admin-table>tbody>tr:last-child>td{border-bottom:0}.mp-product-cell{display:flex;align-items:center;gap:.75rem;min-width:260px}.mp-product-thumb{display:grid;place-items:center;width:46px;height:54px;border:1px solid var(--mp-border);border-radius:8px;background:var(--mp-soft);overflow:hidden;color:var(--btcpay-primary,#155eef);flex:none}.mp-product-thumb img{width:100%;height:100%;object-fit:cover}.mp-product-thumb svg{width:20px;height:20px;fill:currentColor}.mp-product-info{min-width:0}.mp-product-info strong{display:block;max-width:310px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.84rem}.mp-product-info span{display:block;color:var(--mp-muted);font-size:.7rem}.mp-format{display:flex;align-items:center;gap:.45rem;white-space:nowrap;font-size:.78rem}.mp-format svg{width:16px;height:16px;fill:currentColor;color:var(--btcpay-primary,#155eef)}
+    .mp-badge{display:inline-flex;align-items:center;gap:.3rem;border-radius:999px;padding:.27rem .55rem;font-size:.68rem;font-weight:750;white-space:nowrap}.mp-badge.is-live,.mp-badge.is-paid,.mp-badge.is-ready{background:rgba(var(--btcpay-success-rgb,18,183,106),.12);color:var(--btcpay-success,#067647)}.mp-badge.is-draft,.mp-badge.is-pending{background:var(--mp-soft);color:var(--mp-muted)}.mp-badge.is-warning,.mp-badge.is-expired{background:rgba(var(--btcpay-warning-rgb,247,144,9),.13);color:var(--btcpay-warning-text,#b54708)}.mp-badge.is-revoked{background:rgba(var(--btcpay-danger-rgb,240,68,56),.11);color:var(--btcpay-danger,#b42318)}
+    .mp-table-empty{padding:3.2rem 1rem!important;text-align:center}.mp-table-empty svg{width:34px;height:34px;fill:currentColor;color:var(--mp-muted);margin-bottom:.7rem}.mp-table-empty strong{display:block;margin-bottom:.2rem}.mp-table-empty span{display:block;color:var(--mp-muted);font-size:.8rem;margin-bottom:.9rem}.mp-filter-empty{display:none;padding:2rem;text-align:center;color:var(--mp-muted);font-size:.82rem}.mp-filter-empty.is-visible{display:block}
+    .mp-order-id{font-size:.73rem}.mp-order-customer{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mp-attribution{display:flex;align-items:flex-start;gap:.7rem;border:1px solid rgba(var(--btcpay-primary-rgb,21,94,239),.2);border-radius:10px;background:rgba(var(--btcpay-primary-rgb,21,94,239),.055);padding:.85rem 1rem;color:var(--mp-muted);font-size:.78rem;line-height:1.45}.mp-attribution svg{width:18px;height:18px;fill:currentColor;color:var(--btcpay-primary,#155eef);flex:none;margin-top:.1rem}
+    @@media(max-width:991.98px){.mp-stat-grid{grid-template-columns:1fr 1fr}.mp-panel-head{align-items:stretch;flex-direction:column}.mp-panel-tools{width:100%}.mp-search{flex:1;min-width:180px}}
+    @@media(max-width:575.98px){.mp-stat-grid{grid-template-columns:1fr}.mp-admin-actions{width:100%}.mp-admin-actions .btn-primary{flex:1}.mp-panel-tools{align-items:stretch;flex-direction:column}.mp-search{width:100%}.mp-product-cell{min-width:220px}}
+</style>
+
+<div class="mp-admin-dashboard">
+    <div class="sticky-header d-flex justify-content-between align-items-center">
+        <div class="mp-admin-heading"><h2 class="mb-0">Digital products</h2><p>Sell protected files, ebooks, audio, video, photos, and software licenses with BTCPay.</p></div>
+        <div class="mp-admin-actions">
+            <a class="btn btn-secondary" target="_blank" rel="noopener" asp-controller="DigitalDownloadsPublic" asp-action="Storefront" asp-route-storeId="@Model.StoreId"><svg class="mp-admin-icon me-1" aria-hidden="true"><use href="/img/icon-sprite.svg#actions-show"></use></svg>View store</a>
+            <a class="btn btn-secondary" asp-action="Settings" asp-route-storeId="@Model.StoreId"><svg class="mp-admin-icon me-1" aria-hidden="true"><use href="/img/icon-sprite.svg#settings"></use></svg>Store settings</a>
+            <a class="btn btn-primary" asp-action="Product" asp-route-storeId="@Model.StoreId"><svg class="mp-admin-icon me-1" aria-hidden="true"><use href="/img/icon-sprite.svg#actions-add"></use></svg>Add product</a>
+        </div>
     </div>
+
+    <nav class="nav mp-admin-tabs" aria-label="Digital product sections">
+        <a class="nav-link active" aria-current="page" asp-controller="DigitalDownloadsAdmin" asp-action="Index" asp-route-storeId="@Model.StoreId">Products</a>
+        <a class="nav-link" asp-controller="LicenseManagerAdmin" asp-action="Index" asp-route-storeId="@Model.StoreId">License keys</a>
+    </nav>
+
+    <partial name="_StatusMessage" />
+
+    <div class="mp-stat-grid" aria-label="Store summary">
+        <div class="mp-stat-card"><span class="mp-stat-icon"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#nav-products"></use></svg></span><div class="mp-stat-copy"><span>All products</span><strong>@Model.Products.Count</strong></div></div>
+        <div class="mp-stat-card"><span class="mp-stat-icon"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#actions-show"></use></svg></span><div class="mp-stat-copy"><span>Published</span><strong>@publishedProducts</strong></div></div>
+        <div class="mp-stat-card"><span class="mp-stat-icon"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#checkout-complete"></use></svg></span><div class="mp-stat-copy"><span>Paid orders</span><strong>@paidOrders</strong></div></div>
+        <div class="mp-stat-card"><span class="mp-stat-icon"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#actions-download"></use></svg></span><div class="mp-stat-copy"><span>Files delivered</span><strong>@deliveries</strong></div></div>
+    </div>
+
+    <section class="mp-panel" aria-labelledby="products-heading">
+        <div class="mp-panel-head">
+            <div><h3 id="products-heading">Products</h3><p>Manage catalog visibility, protected content, delivery mode, and previews.</p></div>
+            @if (Model.Products.Any())
+            {
+                <div class="mp-panel-tools">
+                    <label class="mp-search"><span class="visually-hidden">Search products</span><svg aria-hidden="true"><use href="/img/icon-sprite.svg#actions-search"></use></svg><input class="form-control form-control-sm" type="search" placeholder="Search products" data-product-search /></label>
+                    <label><span class="visually-hidden">Filter by format</span><select class="form-select form-select-sm" data-product-filter><option value="">All formats</option>@foreach (var type in productTypes) { <option value="@type">@DigitalStorefrontBuilder.ProductTypeLabel(type)</option> }</select></label>
+                    <label><span class="visually-hidden">Filter by status</span><select class="form-select form-select-sm" data-status-filter><option value="">All statuses</option><option value="published">Published</option><option value="draft">Draft</option><option value="needs-content">Needs content</option></select></label>
+                </div>
+            }
+        </div>
+        @if (Model.Products.Any())
+        {
+            <div class="mp-type-summary" aria-label="Products by format">
+                @foreach (var type in productTypes)
+                {
+                    var count = Model.Products.Count(product => product.ProductType == type);
+                    <span class="mp-type-chip"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#@TypeIcon(type)"></use></svg>@DigitalStorefrontBuilder.ProductTypeLabel(type) <strong>@count</strong></span>
+                }
+            </div>
+        }
+        <div class="table-responsive">
+            <table class="table mp-admin-table align-middle">
+                <thead><tr><th>Product</th><th>Format</th><th>Delivery</th><th>Price</th><th>Health</th><th>Status</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+                <tbody data-product-rows>
+                    @if (!Model.Products.Any())
+                    {
+                        <tr><td colspan="7" class="mp-table-empty"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#nav-products"></use></svg><strong>Create your first digital product</strong><span>Upload a file or connect S3, then add a professional public preview.</span><a class="btn btn-primary" asp-action="Product" asp-route-storeId="@Model.StoreId">Add product</a></td></tr>
+                    }
+                    @foreach (var product in Model.Products)
+                    {
+                        var hasContent = !string.IsNullOrWhiteSpace(product.StorageLocation);
+                        var health = !hasContent ? "Content needed" : product.PreviewEnabled && product.PreviewAssets.Count == 0 ? "Preview missing" : "Ready";
+                        var healthClass = !hasContent || product.PreviewEnabled && product.PreviewAssets.Count == 0 ? "is-warning" : "is-ready";
+                        var searchable = $"{product.Name} {product.Slug} {product.Creator} {product.MediaDetails}".ToLowerInvariant();
+                        <tr data-product-row data-search="@searchable" data-type="@product.ProductType" data-status="@(!hasContent ? "needs-content" : product.Active ? "published" : "draft")">
+                            <td>
+                                <div class="mp-product-cell">
+                                    <span class="mp-product-thumb">
+                                        @if (!string.IsNullOrWhiteSpace(product.ImageUrl)) { <img src="@product.ImageUrl" alt="" loading="lazy" /> }
+                                        else { <svg aria-hidden="true"><use href="/img/icon-sprite.svg#@TypeIcon(product.ProductType)"></use></svg> }
+                                    </span>
+                                    <span class="mp-product-info"><strong>@product.Name</strong><span>/@product.Slug@if (!string.IsNullOrWhiteSpace(product.Creator)) { <text> · @product.Creator</text> }</span></span>
+                                </div>
+                            </td>
+                            <td><span class="mp-format"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#@TypeIcon(product.ProductType)"></use></svg>@DigitalStorefrontBuilder.ProductTypeLabel(product.ProductType)</span></td>
+                            <td><span class="small">@DigitalStorefrontBuilder.DeliveryLabel(product)</span>@if (product.PreviewEnabled && product.PreviewAssets.Count > 0) { <div class="small text-muted">@product.PreviewAssets.Count public @(product.PreviewAssets.Count == 1 ? "preview" : "previews")</div> }</td>
+                            <td class="text-nowrap"><strong>@DisplayFormatter.Currency(product.Price, Model.Settings.Currency)</strong>@if (product.CompareAtPrice is { } compare) { <div class="small text-muted text-decoration-line-through">@DisplayFormatter.Currency(compare, Model.Settings.Currency)</div> }</td>
+                            <td><span class="mp-badge @healthClass">@health</span></td>
+                            <td><span class="mp-badge @(product.Active ? "is-live" : "is-draft")">@(product.Active ? "Published" : "Draft")</span></td>
+                            <td class="text-end"><a class="btn btn-sm btn-secondary" asp-action="Product" asp-route-storeId="@Model.StoreId" asp-route-productId="@product.Id">Edit</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="mp-filter-empty" data-product-filter-empty>No products match those filters.</div>
+    </section>
+
+    <section class="mp-panel" aria-labelledby="orders-heading">
+        <div class="mp-panel-head"><div><h3 id="orders-heading">Recent orders</h3><p>The latest 100 purchases, payment states, and protected delivery activity.</p></div></div>
+        <div class="table-responsive">
+            <table class="table mp-admin-table align-middle">
+                <thead><tr><th>Created</th><th>Order / invoice</th><th>Product</th><th>Customer</th><th>Status</th><th>Downloads</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+                <tbody>
+                    @if (!Model.Orders.Any()) { <tr><td colspan="7" class="mp-table-empty"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#nav-invoices"></use></svg><strong>No orders yet</strong><span>Paid purchases and delivery activity will appear here.</span></td></tr> }
+                    @foreach (var order in Model.Orders)
+                    {
+                        productsById.TryGetValue(order.ProductId, out var currentProduct);
+                        var productName = order.ProductSnapshot?.Name ?? currentProduct?.Name ?? "Deleted product";
+                        var shortId = order.Id[..Math.Min(8, order.Id.Length)];
+                        var statusClass = order.Status switch { DigitalOrderStatus.Paid => "is-paid", DigitalOrderStatus.Pending => "is-pending", DigitalOrderStatus.Expired => "is-expired", _ => "is-revoked" };
+                        <tr>
+                            <td class="text-nowrap small">@order.CreatedAt.ToBrowserDate()</td>
+                            <td><code class="mp-order-id">@shortId</code>@if (order.InvoiceId is not null) { <div><a class="small" asp-controller="UIInvoice" asp-action="Invoice" asp-route-invoiceId="@order.InvoiceId">Open invoice</a></div> }</td>
+                            <td><strong class="small">@productName</strong></td>
+                            <td><span class="small mp-order-customer" title="@order.BuyerEmail">@order.BuyerEmail</span></td>
+                            <td><span class="mp-badge @statusClass">@order.Status</span></td>
+                            <td><span class="small">@order.DownloadCount / @order.MaxDownloads</span>@if (order.LastStreamAt is not null) { <div class="small text-muted">Streamed</div> }</td>
+                            <td class="text-end">@if (order.Status == DigitalOrderStatus.Paid) { <form method="post" asp-action="Revoke" asp-route-storeId="@Model.StoreId" asp-route-orderId="@order.Id" data-revoke-form><button class="btn btn-sm btn-outline-danger" type="submit">Revoke</button></form> }</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <div class="mp-attribution"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#info"></use></svg><div><strong>Created by MakePay.io.</strong> Accept 90+ currencies in a decentralized way with BTCPay Server. <a href="https://makepay.io" target="_blank" rel="noopener">Explore MakePay</a>.</div></div>
 </div>
-<nav class="nav nav-pills gap-2 mb-4" aria-label="Digital product sections">
-    <a class="nav-link active" aria-current="page" asp-controller="DigitalDownloadsAdmin" asp-action="Index" asp-route-storeId="@Model.StoreId">Downloads</a>
-    <a class="nav-link" asp-controller="LicenseManagerAdmin" asp-action="Index" asp-route-storeId="@Model.StoreId">License keys</a>
-</nav>
-<partial name="_StatusMessage" />
-<div class="row g-3 mb-4">
-    <div class="col-md-4"><div class="bg-tile rounded p-3"><div class="text-muted">Products</div><div class="h3 mb-0">@Model.Products.Count</div></div></div>
-    <div class="col-md-4"><div class="bg-tile rounded p-3"><div class="text-muted">Paid orders</div><div class="h3 mb-0">@Model.Orders.Count(o => o.Status == DigitalOrderStatus.Paid)</div></div></div>
-    <div class="col-md-4"><div class="bg-tile rounded p-3"><div class="text-muted">Downloads served</div><div class="h3 mb-0">@Model.Orders.Sum(o => o.DownloadCount)</div></div></div>
-</div>
-<h4>Products</h4>
-<div class="table-responsive mb-5"><table class="table align-middle"><thead><tr><th>Name</th><th>Storage</th><th>Price</th><th>Status</th><th></th></tr></thead><tbody>
-@if (!Model.Products.Any()) { <tr><td colspan="5" class="text-muted py-4">Add your first product to publish the storefront.</td></tr> }
-@foreach (var product in Model.Products) {
-<tr><td><strong>@product.Name</strong><div class="small text-muted">/@product.Slug</div></td><td>@product.StorageKind</td><td>@DisplayFormatter.Currency(product.Price, Model.Settings.Currency)</td><td>@(product.Active ? "Published" : "Draft")</td><td class="text-end"><a class="btn btn-sm btn-secondary" asp-action="Product" asp-route-storeId="@Model.StoreId" asp-route-productId="@product.Id">Edit</a></td></tr>
-}</tbody></table></div>
-<h4>Recent orders</h4>
-<div class="table-responsive"><table class="table align-middle"><thead><tr><th>Created</th><th>Order / invoice</th><th>Customer</th><th>Status</th><th>Downloads</th><th></th></tr></thead><tbody>
-@if (!Model.Orders.Any()) { <tr><td colspan="6" class="text-muted py-4">No orders yet.</td></tr> }
-@foreach (var order in Model.Orders) {
-<tr><td>@order.CreatedAt.ToBrowserDate()</td><td><code>@order.Id[..8]</code>@if (order.InvoiceId is not null){<div><a asp-controller="UIInvoice" asp-action="Invoice" asp-route-invoiceId="@order.InvoiceId">@order.InvoiceId</a></div>}</td><td>@order.BuyerEmail</td><td>@order.Status</td><td>@order.DownloadCount / @order.MaxDownloads</td><td class="text-end">@if(order.Status == DigitalOrderStatus.Paid){<form method="post" asp-action="Revoke" asp-route-storeId="@Model.StoreId" asp-route-orderId="@order.Id"><button class="btn btn-sm btn-outline-danger">Revoke</button></form>}</td></tr>
-}</tbody></table></div>
-<div class="alert alert-info mt-4 mb-0">@Model.Settings.PromotionText <a href="https://makepay.io" target="_blank" rel="noopener">Enable 90+ currencies with MakePay</a>.</div>
+
+<script>
+(() => {
+    const search = document.querySelector('[data-product-search]');
+    const type = document.querySelector('[data-product-filter]');
+    const status = document.querySelector('[data-status-filter]');
+    const rows = [...document.querySelectorAll('[data-product-row]')];
+    const empty = document.querySelector('[data-product-filter-empty]');
+    function filterProducts() {
+        const query = search?.value.trim().toLowerCase() || '';
+        const selectedType = type?.value || '';
+        const selectedStatus = status?.value || '';
+        let visible = 0;
+        rows.forEach(row => {
+            const matches = (!query || row.dataset.search.includes(query)) && (!selectedType || row.dataset.type === selectedType) && (!selectedStatus || row.dataset.status === selectedStatus);
+            row.hidden = !matches;
+            if (matches) visible++;
+        });
+        empty?.classList.toggle('is-visible', rows.length > 0 && visible === 0);
+    }
+    search?.addEventListener('input', filterProducts);
+    type?.addEventListener('change', filterProducts);
+    status?.addEventListener('change', filterProducts);
+    document.querySelectorAll('[data-revoke-form]').forEach(form => form.addEventListener('submit', event => {
+        if (!window.confirm('Revoke this customer’s protected access? This takes effect immediately.')) event.preventDefault();
+        else form.querySelector('button').disabled = true;
+    }));
+})();
+</script>
