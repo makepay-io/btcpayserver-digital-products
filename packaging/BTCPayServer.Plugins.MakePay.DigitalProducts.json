@@ -1,7 +1,7 @@
 {
   "Identifier": "BTCPayServer.Plugins.MakePay.DigitalProducts",
   "Name": "MakePay Digital Products",
-  "Version": "1.1.0.0",
+  "Version": "1.1.1.0",
   "Description": "Modern editable storefront, unified cart, passwordless customer library, protected downloads, and signed license management.",
   "SystemPlugin": false,
   "Dependencies": [{ "Identifier": "BTCPayServer", "Condition": ">=2.3.5" }],
