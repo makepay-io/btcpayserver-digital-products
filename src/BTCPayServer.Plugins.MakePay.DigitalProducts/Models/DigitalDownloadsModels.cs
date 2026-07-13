@@ -1,5 +1,6 @@
 #nullable enable
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 using BTCPayServer.Plugins.MakePay.LicenseManager.Models;
 
 namespace BTCPayServer.Plugins.MakePay.DigitalProducts.Models;
@@ -18,6 +19,13 @@ public enum DigitalStoreFontStyle
     [Display(Name = "Rounded sans")] Rounded,
     [Display(Name = "Editorial serif")] Editorial,
     [Display(Name = "Neo-grotesk sans")] Grotesk
+}
+
+public enum AnalyticsProvider
+{
+    [Display(Name = "Disabled (dataLayer only)")] Disabled = 0,
+    [Display(Name = "Google Tag Manager")] GoogleTagManager = 1,
+    [Display(Name = "Google Analytics 4 (direct)")] GoogleAnalytics = 2
 }
 
 public enum DigitalProductKind { Download, License }
@@ -115,6 +123,13 @@ public sealed class DigitalDownloadsSettings
     [StringLength(500)] public string ConfirmationMessage { get; set; } = "Payment is confirmed. Your protected products and license keys are now available.";
     [StringLength(1000)] public string FooterText { get; set; } = "Payments, streaming, and delivery are processed securely by this BTCPay Server.";
     [Url, StringLength(500)] public string? PrivacyUrl { get; set; }
+    public AnalyticsProvider AnalyticsProvider { get; set; }
+    [StringLength(32), RegularExpression("(?i)^\\s*GTM-[A-Z0-9]+\\s*$", ErrorMessage = "Use a valid Google Tag Manager container ID such as GTM-ABC123.")]
+    public string? GoogleTagManagerContainerId { get; set; }
+    [StringLength(32), RegularExpression("(?i)^\\s*G-[A-Z0-9]+\\s*$", ErrorMessage = "Use a valid Google Analytics 4 measurement ID such as G-ABC123DEF4.")]
+    public string? GoogleAnalyticsMeasurementId { get; set; }
+    public bool RequireAnalyticsConsent { get; set; } = true;
+    public bool RespectDoNotTrack { get; set; } = true;
     [RegularExpression("^#[0-9a-fA-F]{6}$")] public string AccentColor { get; set; } = "#155EEF";
     [RegularExpression("^#[0-9a-fA-F]{6}$")] public string AccentTextColor { get; set; } = "#FFFFFF";
     [RegularExpression("^#[0-9a-fA-F]{6}$")] public string BrandTextColor { get; set; } = "#FFFFFF";
@@ -402,6 +417,35 @@ public sealed class StorefrontViewModel
     public string? ActiveCategorySlug { get; init; }
     public int CartCount { get; init; }
     public string? CustomerEmail { get; init; }
+}
+
+public sealed class DigitalAnalyticsViewModel
+{
+    public required string StoreId { get; init; }
+    public required DigitalDownloadsSettings Settings { get; init; }
+    public required string PageType { get; init; }
+}
+
+public sealed class DigitalAnalyticsItem
+{
+    [JsonPropertyName("item_id")] public required string ItemId { get; init; }
+    [JsonPropertyName("item_name")] public required string ItemName { get; init; }
+    [JsonPropertyName("item_category")] public required string ItemCategory { get; init; }
+    [JsonPropertyName("item_variant")] public required string ItemVariant { get; init; }
+    [JsonPropertyName("price")] public decimal Price { get; init; }
+    [JsonPropertyName("quantity")] public int Quantity { get; init; }
+    [JsonPropertyName("index"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? Index { get; init; }
+}
+
+public sealed class DigitalAnalyticsPayload
+{
+    [JsonPropertyName("currency")] public required string Currency { get; init; }
+    [JsonPropertyName("value")] public decimal Value { get; init; }
+    [JsonPropertyName("items")] public required IReadOnlyList<DigitalAnalyticsItem> Items { get; init; }
+    [JsonPropertyName("transaction_id"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? TransactionId { get; init; }
+    [JsonPropertyName("item_list_id"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ItemListId { get; init; }
+    [JsonPropertyName("item_list_name"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ItemListName { get; init; }
+    [JsonPropertyName("payment_type"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? PaymentType { get; init; }
 }
 
 public sealed class DigitalHeroSlideViewModel

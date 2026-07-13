@@ -188,6 +188,15 @@ public sealed class DigitalDownloadsAdminController(
         if (categories is not null) posted.StorefrontCategories = categories;
 
         ValidateEditorState(posted, validProductReferences);
+        DigitalAnalyticsBuilder.NormalizeConfiguration(posted);
+        // Retain inactive provider IDs for convenient switching, but do not let an
+        // unused value prevent saving the selected provider or dataLayer-only mode.
+        if (posted.AnalyticsProvider != AnalyticsProvider.GoogleTagManager)
+            ModelState.Remove(nameof(posted.GoogleTagManagerContainerId));
+        if (posted.AnalyticsProvider != AnalyticsProvider.GoogleAnalytics)
+            ModelState.Remove(nameof(posted.GoogleAnalyticsMeasurementId));
+        if (DigitalAnalyticsBuilder.ConfigurationError(posted) is { } analyticsError)
+            ModelState.AddModelError(nameof(posted.AnalyticsProvider), analyticsError);
         posted.ProtectedS3SecretKey = string.IsNullOrWhiteSpace(s3SecretKey) ? existing.ProtectedS3SecretKey : secrets.ProtectSecret(s3SecretKey);
         posted.ProtectedRemoteAuthorizationValue = string.IsNullOrWhiteSpace(remoteAuthorizationValue) ? existing.ProtectedRemoteAuthorizationValue : secrets.ProtectSecret(remoteAuthorizationValue);
         posted.CustomerAccountsEnabled = true;

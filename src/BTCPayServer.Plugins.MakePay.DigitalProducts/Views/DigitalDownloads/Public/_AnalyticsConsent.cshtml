@@ -1,0 +1,26 @@
+@model DigitalAnalyticsViewModel
+@if (DigitalAnalyticsBuilder.HasConfiguredProvider(Model.Settings) && Model.Settings.RequireAnalyticsConsent)
+{
+    <aside class="mp-analytics-consent" data-makepay-analytics-consent hidden role="dialog" aria-modal="false" aria-labelledby="mp-analytics-consent-title">
+        <div>
+            <strong id="mp-analytics-consent-title">Help us improve this shop</strong>
+            <p>Allow privacy-conscious Google analytics for anonymous storefront and checkout events. Customer email, license keys, and download tokens are never included.</p>
+            @if (!string.IsNullOrWhiteSpace(Model.Settings.PrivacyUrl))
+            {
+                <a href="@Model.Settings.PrivacyUrl" target="_blank" rel="noopener noreferrer">Privacy policy</a>
+            }
+        </div>
+        <div class="mp-analytics-consent-actions">
+            <button type="button" data-makepay-consent-reject>Continue without analytics</button>
+            <button type="button" data-makepay-consent-accept>Allow analytics</button>
+        </div>
+    </aside>
+    <button class="mp-analytics-preferences" type="button" data-makepay-consent-preferences hidden>Analytics preferences</button>
+    <style>
+        .mp-analytics-consent{position:fixed;z-index:2147483000;left:50%;bottom:18px;transform:translateX(-50%);display:flex;align-items:center;justify-content:space-between;gap:24px;width:min(920px,calc(100% - 28px));padding:18px 20px;border:1px solid var(--dp-border,#d0d5dd);border-radius:14px;background:var(--dp-surface,#fff);color:var(--dp-text,#101828);box-shadow:0 22px 60px rgba(16,24,40,.22);font:500 .86rem/1.45 var(--dp-font,system-ui,sans-serif)}
+        .mp-analytics-consent[hidden]{display:none}.mp-analytics-consent strong{display:block;margin-bottom:3px;font-size:.95rem}.mp-analytics-consent p{max-width:620px;margin:0;color:var(--dp-muted,#667085)}.mp-analytics-consent a{display:inline-block;margin-top:5px;color:var(--dp-accent,#155eef);font-weight:750}.mp-analytics-consent-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}.mp-analytics-consent button{min-height:42px;padding:9px 13px;border:1px solid var(--dp-border,#d0d5dd);border-radius:9px;background:var(--dp-surface,#fff);color:var(--dp-text,#101828);font:inherit;font-weight:750;cursor:pointer}.mp-analytics-consent button[data-makepay-consent-accept]{border-color:var(--dp-accent,#155eef);background:var(--dp-accent,#155eef);color:var(--dp-accent-text,#fff)}
+        .mp-analytics-preferences{position:fixed;z-index:2147482999;right:14px;bottom:14px;min-height:36px;padding:7px 11px;border:1px solid var(--dp-border,#d0d5dd);border-radius:999px;background:var(--dp-surface,#fff);color:var(--dp-muted,#667085);box-shadow:0 8px 28px rgba(16,24,40,.14);font:700 .75rem/1.2 var(--dp-font,system-ui,sans-serif);cursor:pointer}.mp-analytics-preferences[hidden]{display:none}.mp-analytics-preferences:hover,.mp-analytics-preferences:focus-visible{border-color:var(--dp-accent,#155eef);color:var(--dp-accent,#155eef)}
+        @@media(max-width:720px){.mp-analytics-consent{align-items:stretch;flex-direction:column;gap:14px}.mp-analytics-consent-actions{display:grid;grid-template-columns:1fr 1fr}.mp-analytics-consent button{min-width:0}}
+        @@media(max-width:460px){.mp-analytics-consent-actions{grid-template-columns:1fr}}
+    </style>
+}

@@ -4,6 +4,9 @@
     ViewData["StoreId"] = Model.StoreId;
     var waiting = Model.Checkout.Status is DigitalCheckoutStatus.Pending or DigitalCheckoutStatus.Processing;
     var mediaScriptUrl = Url.Action("Asset", "DigitalDownloadsAssets", new { storeId = Model.StoreId, fileName = "makepay-media.js" });
+    var analytics = new DigitalAnalyticsViewModel { StoreId = Model.StoreId, Settings = Model.Settings, PageType = "purchase" };
+    var purchaseAnalytics = DigitalAnalyticsBuilder.Checkout(Model.Checkout, purchase: true);
+    var analyticsDedupeId = DigitalAnalyticsBuilder.AnalyticsTransactionId(Model.Checkout);
 }
 <!doctype html>
 <html lang="en">
@@ -14,6 +17,7 @@
     @if(waiting){<meta http-equiv="refresh" content="5">}
     <title>Your purchase · @Model.Settings.StorefrontTitle</title>
     <partial name="~/Views/DigitalDownloads/Public/_Theme.cshtml" model="Model.Settings" />
+    <partial name="~/Views/DigitalDownloads/Public/_AnalyticsHead.cshtml" model="analytics" />
 </head>
 <body class="dp-public">
 <main class="dp-shell">
@@ -44,6 +48,11 @@
     </section>
     <partial name="~/Views/DigitalDownloads/Public/_Footer.cshtml" model="Model.Settings" />
 </main>
+@if (Model.Checkout.Status == DigitalCheckoutStatus.Paid)
+{
+    <script type="application/json" data-makepay-analytics-load="purchase" data-makepay-analytics-once="@analyticsDedupeId">@Html.Raw(JsonSerializer.Serialize(purchaseAnalytics))</script>
+}
+<partial name="~/Views/DigitalDownloads/Public/_AnalyticsConsent.cshtml" model="analytics" />
 <script src="@mediaScriptUrl" defer></script>
 </body>
 </html>

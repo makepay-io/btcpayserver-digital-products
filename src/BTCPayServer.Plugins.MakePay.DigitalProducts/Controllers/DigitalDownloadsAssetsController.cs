@@ -9,6 +9,8 @@ public sealed class DigitalDownloadsAssetsController : Controller
     private static readonly IReadOnlyDictionary<string, (string Resource, string ContentType)> Assets =
         new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase)
         {
+            ["makepay-analytics.js"] =
+                ("BTCPayServer.Plugins.MakePay.DigitalProducts.Assets.makepay-analytics.js", "text/javascript; charset=utf-8"),
             ["makepay-media.js"] =
                 ("BTCPayServer.Plugins.MakePay.DigitalProducts.Assets.pdfjs.makepay-media.js", "text/javascript; charset=utf-8"),
             ["pdf.min.mjs"] =

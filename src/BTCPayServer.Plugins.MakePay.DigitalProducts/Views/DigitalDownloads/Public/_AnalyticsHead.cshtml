@@ -1,0 +1,31 @@
+@inject BTCPayServer.Security.ContentSecurityPolicies Csp
+@model DigitalAnalyticsViewModel
+@{
+    var configured = DigitalAnalyticsBuilder.HasConfiguredProvider(Model.Settings);
+    if (configured)
+    {
+        // GTM/gtag is loaded dynamically by our same-origin runtime after the privacy checks.
+        // Keep this allowlist narrow so enabling analytics does not relax the rest of BTCPay's CSP.
+        Csp.Add("script-src", "https://*.googletagmanager.com");
+        Csp.Add("connect-src", "'self'");
+        Csp.Add("connect-src", "https://*.google-analytics.com");
+        Csp.Add("connect-src", "https://*.analytics.google.com");
+        Csp.Add("connect-src", "https://*.googletagmanager.com");
+    }
+    var runtimeUrl = Url.Action("Asset", "DigitalDownloadsAssets", new
+    {
+        storeId = Model.StoreId,
+        fileName = "makepay-analytics.js",
+        v = DigitalProductsPlugin.PluginVersion
+    });
+}
+<meta name="referrer" content="no-referrer">
+<script src="@runtimeUrl"
+        data-provider="@DigitalAnalyticsBuilder.ProviderToken(Model.Settings)"
+        data-gtm-container-id="@Model.Settings.GoogleTagManagerContainerId"
+        data-ga-measurement-id="@Model.Settings.GoogleAnalyticsMeasurementId"
+        data-store-id="@Model.StoreId"
+        data-plugin="@DigitalAnalyticsBuilder.PluginContext"
+        data-page-type="@Model.PageType"
+        data-require-consent="@Model.Settings.RequireAnalyticsConsent.ToString().ToLowerInvariant()"
+        data-respect-dnt="@Model.Settings.RespectDoNotTrack.ToString().ToLowerInvariant()"></script>
