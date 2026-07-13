@@ -81,6 +81,73 @@ public static class DigitalStorefrontBuilder
     public static string ProductKindSegment(StoreProductViewModel product) =>
         product.Kind == DigitalProductKind.License ? "license" : "download";
 
+    public static string ProductAssetKind(StoreProductViewModel product) =>
+        product.Kind == DigitalProductKind.License ? "license" : product.ProductType switch
+        {
+            DigitalProductType.PdfEbook => "ebook",
+            DigitalProductType.Audio => "audio",
+            DigitalProductType.Video => "video",
+            DigitalProductType.PhotosArt => "photo",
+            _ => "download"
+        };
+
+    public static string ProductTypeLabel(StoreProductViewModel product) =>
+        product.Kind == DigitalProductKind.License ? "Software license" : ProductTypeLabel(product.ProductType ?? DigitalProductType.FileDownload);
+
+    public static string ProductTypeLabel(DigitalProductType type) => type switch
+    {
+        DigitalProductType.PdfEbook => "PDF / ebook",
+        DigitalProductType.Audio => "Music & audio",
+        DigitalProductType.Video => "Video content",
+        DigitalProductType.PhotosArt => "Photos & art",
+        _ => "File download"
+    };
+
+    public static string DeliveryLabel(DigitalProduct product) => product.DeliveryMode switch
+    {
+        DigitalDeliveryMode.Stream => product.ProductType == DigitalProductType.PdfEbook ? "Read online" : "Protected streaming",
+        DigitalDeliveryMode.StreamAndDownload => product.ProductType == DigitalProductType.PdfEbook ? "Read online or download" : "Stream or download",
+        _ => "Protected private download"
+    };
+
+    public static string PreviewActionLabel(DigitalProductType type) => type switch
+    {
+        DigitalProductType.PdfEbook => "Read preview",
+        DigitalProductType.Audio => "Listen to demo",
+        DigitalProductType.Video => "Watch trailer",
+        DigitalProductType.PhotosArt => "View gallery",
+        _ => "Preview sample"
+    };
+
+    public static string ProductMeta(DigitalProduct product)
+    {
+        var detail = product.ProductType switch
+        {
+            DigitalProductType.PdfEbook when product.PageCount is { } pages => $"{pages} pages",
+            DigitalProductType.Audio when product.DurationSeconds is { } seconds => FormatDuration(seconds),
+            DigitalProductType.Video when product.DurationSeconds is { } seconds => FormatDuration(seconds),
+            DigitalProductType.PhotosArt when product.AssetCount is { } count => $"{count} asset{(count == 1 ? "" : "s")}",
+            _ when product.FileSize is { } bytes => FormatBytes(bytes),
+            _ => ProductTypeLabel(product.ProductType)
+        };
+        return $"{detail} · {DeliveryLabel(product)}";
+    }
+
+    public static string FormatDuration(int seconds)
+    {
+        var duration = TimeSpan.FromSeconds(Math.Max(0, seconds));
+        return duration.TotalHours >= 1 ? duration.ToString(@"h\:mm\:ss") : duration.ToString(@"m\:ss");
+    }
+
+    public static string FormatBytes(long bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        var value = Math.Max(0, (double)bytes);
+        var unit = 0;
+        while (value >= 1024 && unit < units.Length - 1) { value /= 1024; unit++; }
+        return $"{value:0.#} {units[unit]}";
+    }
+
     public static string ProductAnchor(StoreProductViewModel product)
     {
         var id = string.Concat(product.Id.Where(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_'));
@@ -96,8 +163,12 @@ public static class DigitalStorefrontBuilder
 
     private static bool Matches(DigitalStoreCategory category, StoreProductViewModel product) => category.Rule switch
     {
-        DigitalStoreCategoryRule.Downloads => product.Kind == DigitalProductKind.Download,
+        DigitalStoreCategoryRule.Downloads => product.Kind == DigitalProductKind.Download && product.ProductType is null or DigitalProductType.FileDownload,
         DigitalStoreCategoryRule.Licenses => product.Kind == DigitalProductKind.License,
+        DigitalStoreCategoryRule.PdfEbooks => product.Kind == DigitalProductKind.Download && product.ProductType == DigitalProductType.PdfEbook,
+        DigitalStoreCategoryRule.Audio => product.Kind == DigitalProductKind.Download && product.ProductType == DigitalProductType.Audio,
+        DigitalStoreCategoryRule.Video => product.Kind == DigitalProductKind.Download && product.ProductType == DigitalProductType.Video,
+        DigitalStoreCategoryRule.PhotosArt => product.Kind == DigitalProductKind.Download && product.ProductType == DigitalProductType.PhotosArt,
         _ => category.ProductReferences.Contains(ProductReference(product), StringComparer.OrdinalIgnoreCase)
     };
 

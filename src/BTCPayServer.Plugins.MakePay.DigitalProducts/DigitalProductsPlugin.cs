@@ -10,7 +10,7 @@ namespace BTCPayServer.Plugins.MakePay.DigitalProducts;
 
 public sealed class DigitalProductsPlugin : BaseBTCPayServerPlugin
 {
-    public const string PluginVersion = "1.2.0";
+    public const string PluginVersion = "1.3.0";
     public const string SettingsKey = "MakePay.DigitalDownloads.Settings";
     public const string CatalogKey = "MakePay.DigitalDownloads.Catalog";
     public const string OrdersKey = "MakePay.DigitalDownloads.Orders";
@@ -19,7 +19,7 @@ public sealed class DigitalProductsPlugin : BaseBTCPayServerPlugin
 
     public override string Identifier => "BTCPayServer.Plugins.MakePay.DigitalProducts";
     public override string Name => "MakePay Digital Products";
-    public override string Description => "Sell protected downloads and generated software licenses from one BTCPay plugin.";
+    public override string Description => "Sell files, ebooks, audio, video, photos, art, and generated software licenses from one BTCPay plugin.";
 
     public override IBTCPayServerPlugin.PluginDependency[] Dependencies { get; } =
     [

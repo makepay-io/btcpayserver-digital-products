@@ -1,0 +1,52 @@
+@model CustomerDownloadViewModel
+@{
+    var storeId = ViewData["StoreId"] as string ?? "";
+    var expired = Model.Order.ExpiresAt is { } expiresAt && expiresAt <= DateTimeOffset.UtcNow;
+    var typeLabel = DigitalStorefrontBuilder.ProductTypeLabel(Model.Product.ProductType);
+    var productImage = Model.Product.ImageUrl ?? Url.Action("ProductAsset", "DigitalDownloadsPublic", new
+    {
+        storeId,
+        kind = Model.Product.ProductType switch
+        {
+            DigitalProductType.PdfEbook => "ebook",
+            DigitalProductType.Audio => "audio",
+            DigitalProductType.Video => "video",
+            DigitalProductType.PhotosArt => "photo",
+            _ => "download"
+        }
+    });
+    var downloadLabel = Model.Product.ProductType switch
+    {
+        DigitalProductType.PdfEbook => "Download PDF",
+        DigitalProductType.Audio => "Download audio",
+        DigitalProductType.Video => "Download video",
+        DigitalProductType.PhotosArt => "Download asset pack",
+        _ => "Download file"
+    };
+    var pdfLibraryUrl = Url.Action("Asset", "DigitalDownloadsAssets", new { storeId, fileName = "pdf.min.mjs" });
+    var pdfWorkerUrl = Url.Action("Asset", "DigitalDownloadsAssets", new { storeId, fileName = "pdf.worker.min.mjs" });
+}
+<article class="dp-library-item">
+    <div class="dp-library-product-head"><div><div class="dp-library-product-type">@typeLabel</div><h3>@Model.Product.Name</h3></div>@if(Model.Product.DeliveryMode != DigitalDeliveryMode.Download && !expired){<span class="dp-status paid">Online access</span>}</div>
+    <p class="dp-library-meta">@if(Model.Product.DeliveryMode != DigitalDeliveryMode.Stream){<span>@Model.Order.DownloadCount of @Model.Order.MaxDownloads downloads used</span>}else{<span>Protected online access</span>}@if(Model.Order.ExpiresAt is not null){<span> · @(expired ? "Expired" : "Access expires") @Model.Order.ExpiresAt.Value.ToString("d MMM yyyy, HH:mm 'UTC'")</span>}</p>
+    @if(expired)
+    {
+        <span class="dp-status">Access expired</span>
+    }
+    else
+    {
+        @if(Model.StreamUrl is not null && Model.Product.ProductType == DigitalProductType.PdfEbook)
+        {
+            <details class="dp-library-reader"><summary>Read ebook online</summary><div class="dp-pdf-reader" data-pdf-reader data-source="@Model.StreamUrl" data-library="@pdfLibraryUrl" data-worker="@pdfWorkerUrl" tabindex="0" aria-label="@Model.Product.Name ebook reader"><div class="dp-pdf-toolbar"><div class="dp-pdf-toolbar-group"><button type="button" data-pdf-previous aria-label="Previous page">Previous</button><label class="dp-pdf-page-count">Page <input class="dp-pdf-page-input" type="number" value="1" min="1" data-pdf-page aria-label="Page number"> of <span data-pdf-total>—</span></label><button type="button" data-pdf-next aria-label="Next page">Next</button></div><div class="dp-pdf-toolbar-group"><button type="button" data-pdf-zoom-out aria-label="Zoom out">Zoom out</button><span class="dp-pdf-zoom-value" data-pdf-zoom-value>100%</span><button type="button" data-pdf-zoom-in aria-label="Zoom in">Zoom in</button></div><div class="dp-pdf-toolbar-group"><button type="button" data-pdf-fullscreen>Full screen</button></div></div><div class="dp-pdf-stage" data-pdf-stage><canvas role="img" aria-label="Current ebook page">Your browser does not support the PDF reader canvas.</canvas></div><p class="dp-pdf-status" data-pdf-status aria-live="polite"><span data-pdf-status-text>Open this reader to load your ebook.</span><a class="dp-pdf-fallback" data-pdf-fallback href="@Model.StreamUrl" target="_blank" rel="noopener noreferrer" hidden>Open PDF directly</a></p></div></details>
+        }
+        else if(Model.StreamUrl is not null && Model.Product.ProductType == DigitalProductType.Audio)
+        {
+            <div class="dp-library-media"><audio controls preload="metadata"><source src="@Model.StreamUrl" type="@Model.Product.ContentType">Your browser does not support audio playback.</audio></div>
+        }
+        else if(Model.StreamUrl is not null && Model.Product.ProductType == DigitalProductType.Video)
+        {
+            <div class="dp-library-media"><video controls playsinline preload="metadata" poster="@productImage"><source src="@Model.StreamUrl" type="@Model.Product.ContentType">Your browser does not support video playback.</video></div>
+        }
+        <div class="dp-library-actions">@if(Model.DownloadUrl is not null){<a class="dp-primary" href="@Model.DownloadUrl">@downloadLabel</a>}@if(Model.DownloadUrl is null && Model.StreamUrl is null){<span class="dp-status">Unavailable</span>}</div>
+    }
+</article>

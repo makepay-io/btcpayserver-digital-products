@@ -1,5 +1,10 @@
 @model DigitalPurchaseViewModel
-@{ Layout = null; var waiting = Model.Checkout.Status is DigitalCheckoutStatus.Pending or DigitalCheckoutStatus.Processing; }
+@{
+    Layout = null;
+    ViewData["StoreId"] = Model.StoreId;
+    var waiting = Model.Checkout.Status is DigitalCheckoutStatus.Pending or DigitalCheckoutStatus.Processing;
+    var mediaScriptUrl = Url.Action("Asset", "DigitalDownloadsAssets", new { storeId = Model.StoreId, fileName = "makepay-media.js" });
+}
 <!doctype html>
 <html lang="en">
 <head>
@@ -17,22 +22,28 @@
         <nav class="dp-topnav"><a class="dp-nav-link" asp-action="Storefront" asp-route-storeId="@Model.StoreId">Browse</a><a class="dp-nav-link is-active" asp-action="Account" asp-route-storeId="@Model.StoreId">Purchases</a></nav>
     </header>
     <section class="dp-success">
-        @if(Model.Checkout.Status == DigitalCheckoutStatus.Paid){
+        @if(Model.Checkout.Status == DigitalCheckoutStatus.Paid)
+        {
             <div class="dp-success-mark"><img src="~/imlegacy/checkmark.svg" alt=""></div>
             <p class="dp-eyebrow">Order complete</p><h1>@Model.Settings.ConfirmationTitle</h1><p class="dp-success-lead">@Model.Settings.ConfirmationMessage</p>
             @if(!Model.CustomerAuthenticated){<div class="dp-auth-note">Use <strong>@Model.Checkout.BuyerEmail</strong> to sign in anytime and recover this purchase from your private library.</div>}
             <div class="dp-library-grid">
-                @if(Model.Downloads.Count>0){<section class="dp-library-section"><header><h2>Downloads</h2></header>@foreach(var item in Model.Downloads){<article class="dp-library-item"><h3>@item.Product.Name</h3><p class="dp-library-meta">@($"{item.Order.DownloadCount} of {item.Order.MaxDownloads} used{(item.Order.ExpiresAt is null ? "" : " · Expires " + item.Order.ExpiresAt.Value.ToString("d MMM yyyy, HH:mm 'UTC'"))}")</p>@if(item.DownloadUrl is not null){<a class="dp-primary" href="@item.DownloadUrl">Download file</a>}else{<span class="dp-status">Unavailable</span>}</article>}</section>}
-                @if(Model.Licenses.Count>0){<section class="dp-library-section"><header><h2>License keys</h2></header>@foreach(var item in Model.Licenses){<article class="dp-library-item"><h3>@item.Product.Name</h3><p class="dp-library-meta">@($"{item.License.Status} · {item.License.Activations.Count} of {item.License.MaxActivations} activations{(item.License.ExpiresAt is null ? "" : " · Expires " + item.License.ExpiresAt.Value.ToString("d MMM yyyy"))}")</p>@if(item.LicenseKey is not null){<input class="dp-key" value="@item.LicenseKey" readonly aria-label="License key for @item.Product.Name">}</article>}</section>}
+                @if(Model.Downloads.Count>0){<section class="dp-library-section"><header><h2>Digital products</h2></header>@foreach(var item in Model.Downloads){<partial name="~/Views/DigitalDownloads/Public/_DigitalLibraryItem.cshtml" model="item" />}</section>}
+                @if(Model.Licenses.Count>0){<section class="dp-library-section"><header><h2>License keys</h2></header>@foreach(var item in Model.Licenses){<article class="dp-library-item"><div class="dp-library-product-head"><div><div class="dp-library-product-type">Software license</div><h3>@item.Product.Name</h3></div><span class="dp-status paid">@item.License.Status</span></div><p class="dp-library-meta">@($"{item.License.Activations.Count} of {item.License.MaxActivations} activations{(item.License.ExpiresAt is null ? " · Lifetime" : " · Expires " + item.License.ExpiresAt.Value.ToString("d MMM yyyy"))}")</p>@if(item.LicenseKey is not null){<input class="dp-key" value="@item.LicenseKey" readonly aria-label="License key for @item.Product.Name">}</article>}</section>}
             </div>
             <div class="dp-actions"><a class="dp-secondary" asp-action="Storefront" asp-route-storeId="@Model.StoreId">Keep shopping</a><a class="dp-primary" asp-action="Account" asp-route-storeId="@Model.StoreId">Open purchase library</a></div>
-        } else if(Model.Checkout.Status == DigitalCheckoutStatus.Cancelled){
+        }
+        else if(Model.Checkout.Status == DigitalCheckoutStatus.Cancelled)
+        {
             <p class="dp-eyebrow">Invoice closed</p><h1>Payment was not completed</h1><p class="dp-success-lead">This invoice can no longer be paid. Return to the shop and start a new checkout when you are ready.</p><div class="dp-actions"><a class="dp-primary" asp-action="Storefront" asp-route-storeId="@Model.StoreId">Return to shop</a></div>
-        } else {
-            <div class="dp-spinner"></div><p class="dp-eyebrow">Confirming payment</p><h1>Preparing your purchase</h1><p class="dp-success-lead">BTCPay is confirming the invoice and securely issuing your downloads and license keys. This page refreshes automatically.</p><p class="dp-library-meta">Order @Model.Checkout.Id[..8]</p>
+        }
+        else
+        {
+            <div class="dp-spinner"></div><p class="dp-eyebrow">Confirming payment</p><h1>Preparing your purchase</h1><p class="dp-success-lead">BTCPay is confirming the invoice and securely issuing your digital products and license keys. This page refreshes automatically.</p><p class="dp-library-meta">Order @Model.Checkout.Id[..8]</p>
         }
     </section>
     <partial name="~/Views/DigitalDownloads/Public/_Footer.cshtml" model="Model.Settings" />
 </main>
+<script src="@mediaScriptUrl" defer></script>
 </body>
 </html>

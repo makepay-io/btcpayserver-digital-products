@@ -1,6 +1,7 @@
 #nullable enable
 using System.ComponentModel.DataAnnotations;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text.Encodings.Web;
 using BTCPayServer.Abstractions.Extensions;
 using BTCPayServer.Client.Models;
@@ -49,12 +50,37 @@ public sealed class DigitalDownloadsPublicController(
     [ResponseCache(Duration = 86400, Location = ResponseCacheLocation.Any)]
     public IActionResult ProductAsset(string kind)
     {
-        var fileName = kind.Equals("license", StringComparison.OrdinalIgnoreCase)
-            ? "makepay-license-cover.png"
-            : "makepay-download-cover.png";
+        var fileName = kind.ToLowerInvariant() switch
+        {
+            "license" => "makepay-license-cover.png",
+            "ebook" => "makepay-ebook-cover.png",
+            "audio" => "makepay-audio-cover.png",
+            "video" => "makepay-video-cover.png",
+            "photo" => "makepay-photo-cover.png",
+            _ => "makepay-download-cover.png"
+        };
         var stream = typeof(DigitalProductsPlugin).Assembly.GetManifestResourceStream(
             "BTCPayServer.Plugins.MakePay.DigitalProducts.Assets." + fileName);
         return stream is null ? NotFound() : File(stream, "image/png");
+    }
+
+    [HttpGet("products/{productId}/preview/{assetId}")]
+    public async Task<IActionResult> ProductPreview(string storeId, string productId, string assetId)
+    {
+        if (await stores.FindStore(storeId) is null) return NotFound();
+        var product = await repository.GetProduct(storeId, productId);
+        if (product is null || !product.Active || !product.PreviewEnabled) return NotFound();
+        var asset = product.PreviewAssets.FirstOrDefault(item => item.Id.Equals(assetId, StringComparison.OrdinalIgnoreCase));
+        if (asset is null) return NotFound();
+        RemoteFile remote;
+        try { remote = files.OpenPreview(storeId, product.Id, asset); }
+        catch (Exception ex) when (ex is FileNotFoundException or UnauthorizedAccessException or InvalidOperationException) { return NotFound(); }
+        Response.RegisterForDisposeAsync(remote);
+        Response.Headers.CacheControl = "public,max-age=300";
+        Response.Headers.XContentTypeOptions = "nosniff";
+        Response.Headers.ContentDisposition = new ContentDispositionHeaderValue("inline") { FileNameStar = asset.FileName }.ToString();
+        if (remote.Length is { } length) Response.ContentLength = length;
+        return File(remote.Stream, remote.ContentType, enableRangeProcessing: true);
     }
 
     [HttpGet("assets/storefront/{assetId}/{fileName}")]
@@ -139,6 +165,7 @@ public sealed class DigitalDownloadsPublicController(
             StoreId = storeId,
             Settings = settings,
             Product = product,
+            DigitalProduct = product.Kind == DigitalProductKind.Download ? await repository.GetProduct(storeId, product.Id) : null,
             Categories = categories,
             RelatedProducts = related,
             CartCount = Cart(storeId).Lines.Sum(line => line.Quantity),
@@ -379,7 +406,7 @@ public sealed class DigitalDownloadsPublicController(
         if (store is null || product is null || !product.Active) return NotFound();
         if (!new EmailAddressAttribute().IsValid(email)) return BadRequest("A valid delivery email is required.");
         var settings = await repository.GetSettings(storeId);
-        var order = new DigitalOrder { StoreId = storeId, ProductId = product.Id, BuyerEmail = email.Trim(), PublicBaseUrl = Request.GetAbsoluteRoot(), Status = DigitalOrderStatus.Pending };
+        var order = new DigitalOrder { StoreId = storeId, ProductId = product.Id, BuyerEmail = email.Trim(), PublicBaseUrl = Request.GetAbsoluteRoot(), Status = DigitalOrderStatus.Pending, ProductSnapshot = DigitalProductSnapshot.From(product) };
         await repository.SaveOrder(storeId, order);
         try
         {
@@ -403,39 +430,30 @@ public sealed class DigitalDownloadsPublicController(
     {
         var order = await repository.GetOrder(storeId, orderId);
         if (order is null) return NotFound();
-        var product = await repository.GetProduct(storeId, order.ProductId);
+        var product = await PurchasedProduct(storeId, order);
         if (product is null) return NotFound();
         string? downloadUrl = null;
+        string? streamUrl = null;
         if (order.Status == DigitalOrderStatus.Paid && tokens.Unprotect(order.ProtectedToken) is { } token)
-            downloadUrl = Url.ActionLink(nameof(Download), values: new { storeId, orderId, token });
-        return View("~/Views/DigitalDownloads/Public/Order.cshtml", new OrderViewModel { Settings = await repository.GetSettings(storeId), Product = product, Order = order, DownloadUrl = downloadUrl });
+        {
+            if (product.DeliveryMode != DigitalDeliveryMode.Stream)
+                downloadUrl = Url.ActionLink(nameof(Download), values: new { storeId, orderId, token });
+            if (product.DeliveryMode != DigitalDeliveryMode.Download && product.ProductType is DigitalProductType.PdfEbook or DigitalProductType.Audio or DigitalProductType.Video)
+                streamUrl = Url.ActionLink(nameof(Stream), values: new { storeId, orderId, token });
+        }
+        return View("~/Views/DigitalDownloads/Public/Order.cshtml", new OrderViewModel { Settings = await repository.GetSettings(storeId), Product = product, Order = order, DownloadUrl = downloadUrl, StreamUrl = streamUrl });
     }
 
     [HttpGet("order/{orderId}/file")]
     public async Task<IActionResult> Download(string storeId, string orderId, string token, CancellationToken cancellationToken)
     {
-        var order = await repository.GetOrder(storeId, orderId);
-        if (order is null || order.Status != DigitalOrderStatus.Paid || string.IsNullOrWhiteSpace(order.TokenHash) || !tokens.Verify(token, order.TokenHash)) return NotFound();
-        if (order.ExpiresAt <= DateTimeOffset.UtcNow || order.DownloadCount >= order.MaxDownloads) return StatusCode(StatusCodes.Status410Gone, "This download link has expired or reached its download limit.");
-        var settings = await repository.GetSettings(storeId);
-        var ipHash = DownloadTokenService.Hash(HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown");
-        if (settings.LockToFirstIp && order.FirstIpHash is not null && order.FirstIpHash != ipHash) return StatusCode(StatusCodes.Status403Forbidden, "This link is locked to its first network address.");
-        var product = await repository.GetProduct(storeId, order.ProductId);
-        if (product is null) return NotFound();
-        var remote = await files.Open(product, settings, cancellationToken);
-        var updated = await repository.UpdateOrder(storeId, orderId, current =>
-        {
-            if (current.Status != DigitalOrderStatus.Paid || current.DownloadCount >= current.MaxDownloads || current.ExpiresAt <= DateTimeOffset.UtcNow) return false;
-            current.FirstIpHash ??= settings.LockToFirstIp ? ipHash : null;
-            current.DownloadCount++;
-            current.LastDownloadAt = DateTimeOffset.UtcNow;
-            return true;
-        });
-        if (updated is null) { await remote.DisposeAsync(); return StatusCode(StatusCodes.Status410Gone); }
-        Response.RegisterForDisposeAsync(remote);
-        Response.Headers.ContentDisposition = new System.Net.Http.Headers.ContentDispositionHeaderValue("attachment") { FileNameStar = product.DownloadFileName }.ToString();
-        if (remote.Length is { } length) Response.ContentLength = length;
-        return File(remote.Stream, remote.ContentType, enableRangeProcessing: product.StorageKind == ProductStorageKind.Local);
+        return await ServePurchasedMedia(storeId, orderId, token, inline: false, cancellationToken);
+    }
+
+    [HttpGet("order/{orderId}/stream")]
+    public async Task<IActionResult> Stream(string storeId, string orderId, string token, CancellationToken cancellationToken)
+    {
+        return await ServePurchasedMedia(storeId, orderId, token, inline: true, cancellationToken);
     }
 
     private async Task<IReadOnlyList<StoreProductViewModel>> Catalog(string storeId) =>
@@ -462,14 +480,117 @@ public sealed class DigitalDownloadsPublicController(
         {
             var order = await repository.GetOrder(storeId, orderId);
             if (order is null) continue;
-            var product = await repository.GetProduct(storeId, order.ProductId);
+            var product = await PurchasedProduct(storeId, order);
             if (product is null) continue;
             string? url = null;
+            string? streamUrl = null;
             if (order.Status == DigitalOrderStatus.Paid && tokens.Unprotect(order.ProtectedToken) is { } token)
-                url = Url.Action(nameof(Download), new { storeId, orderId = order.Id, token });
-            result.Add(new CustomerDownloadViewModel { Order = order, Product = product, DownloadUrl = url });
+            {
+                if (product.DeliveryMode != DigitalDeliveryMode.Stream)
+                    url = Url.Action(nameof(Download), new { storeId, orderId = order.Id, token });
+                if (product.DeliveryMode != DigitalDeliveryMode.Download && product.ProductType is DigitalProductType.PdfEbook or DigitalProductType.Audio or DigitalProductType.Video)
+                    streamUrl = Url.Action(nameof(Stream), new { storeId, orderId = order.Id, token });
+            }
+            result.Add(new CustomerDownloadViewModel { Order = order, Product = product, DownloadUrl = url, StreamUrl = streamUrl });
         }
         return result;
+    }
+
+    private async Task<DigitalProduct?> PurchasedProduct(string storeId, DigitalOrder order) =>
+        order.ProductSnapshot?.ToProduct() ?? await repository.GetProduct(storeId, order.ProductId);
+
+    private async Task<IActionResult> ServePurchasedMedia(string storeId, string orderId, string token, bool inline, CancellationToken cancellationToken)
+    {
+        var order = await repository.GetOrder(storeId, orderId);
+        if (order is null || order.Status != DigitalOrderStatus.Paid || string.IsNullOrWhiteSpace(order.TokenHash) || !tokens.Verify(token, order.TokenHash)) return NotFound();
+        var product = await PurchasedProduct(storeId, order);
+        if (product is null) return NotFound();
+        if (inline && (product.DeliveryMode == DigitalDeliveryMode.Download || product.ProductType is not (DigitalProductType.PdfEbook or DigitalProductType.Audio or DigitalProductType.Video))) return NotFound();
+        if (!inline && product.DeliveryMode == DigitalDeliveryMode.Stream) return NotFound();
+
+        RangeHeaderValue? range = null;
+        if (!string.IsNullOrWhiteSpace(Request.Headers.Range))
+        {
+            if (!RangeHeaderValue.TryParse(Request.Headers.Range, out range) || range.Ranges.Count != 1)
+                return StatusCode(StatusCodes.Status416RangeNotSatisfiable);
+            if (product.FileSize is { } knownLength && !RangeIsSatisfiable(range, knownLength))
+                return StatusCode(StatusCodes.Status416RangeNotSatisfiable);
+        }
+
+        var settings = await repository.GetSettings(storeId);
+        var ipHash = DownloadTokenService.Hash(HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown");
+        var now = DateTimeOffset.UtcNow;
+        var mayCountDownload = !inline && !HttpMethods.IsHead(Request.Method);
+        var incrementedDownload = false;
+        var accessFailure = "expired";
+        var reserved = await repository.UpdateOrder(storeId, orderId, current =>
+        {
+            if (current.Status != DigitalOrderStatus.Paid || string.IsNullOrWhiteSpace(current.TokenHash) || !tokens.Verify(token, current.TokenHash)) { accessFailure = "invalid"; return false; }
+            if (current.ExpiresAt <= now) { accessFailure = "expired"; return false; }
+            var continuingRange = !inline && DigitalDownloadAccessPolicy.IsRangeContinuation(current, range, now);
+            if (!inline && !DigitalDownloadAccessPolicy.CanStartOrContinue(current, range, now)) { accessFailure = "limit"; return false; }
+            if (settings.LockToFirstIp && current.FirstIpHash is not null && current.FirstIpHash != ipHash) { accessFailure = "ip"; return false; }
+            current.FirstIpHash ??= settings.LockToFirstIp ? ipHash : null;
+            if (inline) current.LastStreamAt = now;
+            else if (mayCountDownload && !continuingRange)
+            {
+                current.DownloadCount++;
+                current.LastDownloadAt = now;
+                incrementedDownload = true;
+            }
+            return true;
+        });
+        if (reserved is null)
+            return accessFailure == "ip"
+                ? StatusCode(StatusCodes.Status403Forbidden, "This link is locked to its first network address.")
+                : accessFailure == "invalid" ? NotFound() : StatusCode(StatusCodes.Status410Gone, "This access link has expired or reached its download limit.");
+
+        RemoteFile remote;
+        try { remote = await files.Open(storeId, product, settings, range, cancellationToken); }
+        catch (RemoteRangeNotSatisfiableException ex)
+        {
+            await RollBackDownloadReservation(storeId, orderId, now, incrementedDownload);
+            if (!string.IsNullOrWhiteSpace(ex.ContentRange)) Response.Headers.ContentRange = ex.ContentRange;
+            return StatusCode(StatusCodes.Status416RangeNotSatisfiable);
+        }
+        catch
+        {
+            await RollBackDownloadReservation(storeId, orderId, now, incrementedDownload);
+            throw;
+        }
+
+        Response.RegisterForDisposeAsync(remote);
+        Response.Headers.CacheControl = "private,no-store";
+        Response.Headers.XContentTypeOptions = "nosniff";
+        Response.Headers.ContentDisposition = new ContentDispositionHeaderValue(inline ? "inline" : "attachment") { FileNameStar = product.DownloadFileName }.ToString();
+        if (remote.AcceptsRanges || remote.Stream.CanSeek) Response.Headers.AcceptRanges = "bytes";
+        if (remote.IsPartial)
+        {
+            Response.StatusCode = StatusCodes.Status206PartialContent;
+            if (!string.IsNullOrWhiteSpace(remote.ContentRange)) Response.Headers.ContentRange = remote.ContentRange;
+        }
+        if (remote.Length is { } length) Response.ContentLength = length;
+        return File(remote.Stream, remote.ContentType, enableRangeProcessing: !remote.IsPartial && remote.Stream.CanSeek);
+    }
+
+    private async Task RollBackDownloadReservation(string storeId, string orderId, DateTimeOffset reservationTime, bool incremented)
+    {
+        if (!incremented) return;
+        await repository.UpdateOrder(storeId, orderId, current =>
+        {
+            if (current.LastDownloadAt != reservationTime || current.DownloadCount <= 0) return false;
+            current.DownloadCount--;
+            current.LastDownloadAt = null;
+            return true;
+        });
+    }
+
+    private static bool RangeIsSatisfiable(RangeHeaderValue range, long length)
+    {
+        if (length <= 0 || range.Ranges.Count != 1) return false;
+        var item = range.Ranges.Single();
+        if (item.From is { } from) return from < length && (item.To is null || item.To >= from);
+        return item.To is > 0;
     }
 
     private async Task<IReadOnlyList<CustomerLicenseViewModel>> LicenseItems(string storeId, IEnumerable<string> licenseIds)

@@ -22,11 +22,47 @@ public enum DigitalStoreFontStyle
 
 public enum DigitalProductKind { Download, License }
 
+public enum DigitalProductType
+{
+    [Display(Name = "File download")] FileDownload = 0,
+    [Display(Name = "PDF / ebook")] PdfEbook = 1,
+    [Display(Name = "Music & audio")] Audio = 2,
+    [Display(Name = "Video content")] Video = 3,
+    [Display(Name = "Photos & art")] PhotosArt = 4
+}
+
+public enum DigitalDeliveryMode
+{
+    [Display(Name = "Download only")] Download = 0,
+    [Display(Name = "Stream only")] Stream = 1,
+    [Display(Name = "Stream and download")] StreamAndDownload = 2
+}
+
 public enum DigitalStoreCategoryRule
 {
-    Custom,
-    Downloads,
-    Licenses
+    Custom = 0,
+    Downloads = 1,
+    Licenses = 2,
+    PdfEbooks = 3,
+    Audio = 4,
+    Video = 5,
+    PhotosArt = 6
+}
+
+public sealed class DigitalProductPreviewAsset
+{
+    [Required, StringLength(80)] public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    [StringLength(120)] public string Label { get; set; } = "Preview";
+    [StringLength(240)] public string? AltText { get; set; }
+    [Range(0, 1000)] public int SortOrder { get; set; }
+    public ProductStorageKind StorageKind { get; set; }
+    [StringLength(1000)] public string? StorageLocation { get; set; }
+    [StringLength(260)] public string FileName { get; set; } = "preview.bin";
+    [StringLength(200)] public string ContentType { get; set; } = "application/octet-stream";
+    public long? FileSize { get; set; }
+    public int? Width { get; set; }
+    public int? Height { get; set; }
+    public bool Watermarked { get; set; }
 }
 
 public sealed class DigitalHeroSlide
@@ -35,7 +71,7 @@ public sealed class DigitalHeroSlide
     public bool Visible { get; set; } = true;
     [StringLength(80)] public string Eyebrow { get; set; } = "MakePay Digital";
     [Required, StringLength(180)] public string Headline { get; set; } = "Digital goods, delivered directly";
-    [StringLength(320)] public string SupportingCopy { get; set; } = "Secure downloads and software licenses, paid directly with BTCPay Server.";
+    [StringLength(320)] public string SupportingCopy { get; set; } = "Secure files, ebooks, audio, video, art, and software licenses paid directly with BTCPay Server.";
     [StringLength(500)] public string? ImageUrl { get; set; }
     [StringLength(80)] public string ButtonText { get; set; } = "Explore products";
     [StringLength(500)] public string LinkUrl { get; set; } = "#products";
@@ -54,9 +90,9 @@ public sealed class DigitalStoreCategory
 
 public sealed class DigitalDownloadsSettings
 {
-    [Required, StringLength(80)] public string StorefrontTitle { get; set; } = "Digital downloads";
-    [StringLength(500)] public string StorefrontDescription { get; set; } = "Secure files, delivered after payment.";
-    [StringLength(240)] public string StorefrontAnnouncement { get; set; } = "Secure downloads and software licenses, paid directly with BTCPay Server.";
+    [Required, StringLength(80)] public string StorefrontTitle { get; set; } = "Digital products";
+    [StringLength(500)] public string StorefrontDescription { get; set; } = "Protected digital products, delivered after payment.";
+    [StringLength(240)] public string StorefrontAnnouncement { get; set; } = "Secure digital products, paid directly with BTCPay Server.";
     [Required, StringLength(10)] public string Currency { get; set; } = "USD";
     [StringLength(500)] public string? LogoUrl { get; set; }
     [Range(80, 360)] public int LogoWidth { get; set; } = 190;
@@ -64,17 +100,20 @@ public sealed class DigitalDownloadsSettings
     [StringLength(500)] public string? HeroImageUrl { get; set; }
     [StringLength(80)] public string HeroEyebrow { get; set; } = "MakePay Digital";
     [StringLength(180)] public string HeroHeadline { get; set; } = "Digital goods, delivered directly";
-    [StringLength(320)] public string HeroSubheadline { get; set; } = "Secure downloads and software licenses, paid directly with BTCPay Server.";
+    [StringLength(320)] public string HeroSubheadline { get; set; } = "Secure files, ebooks, audio, video, art, and software licenses paid directly with BTCPay Server.";
     [Range(0, 30)] public int HeroAutoAdvanceSeconds { get; set; } = 6;
     public List<DigitalHeroSlide> HeroSlides { get; set; } = [];
     public List<DigitalStoreCategory> StorefrontCategories { get; set; } = DefaultCategories();
+    public bool MediaCategoryDefaultsApplied { get; set; }
     [StringLength(120)] public string CatalogTitle { get; set; } = "Explore digital products";
-    [StringLength(280)] public string CatalogSubtitle { get; set; } = "Add products to your cart and access every purchase from one private library.";
+    // Optional by design: merchants may remove the supporting catalog copy in the live editor.
+    // Keeping this nullable also prevents MVC's implicit required validation from rejecting an empty field.
+    [StringLength(280)] public string? CatalogSubtitle { get; set; } = "Add products to your cart and access every purchase from one private library.";
     [StringLength(120)] public string LibraryTitle { get; set; } = "Your purchases";
-    [StringLength(300)] public string LibrarySubtitle { get; set; } = "Downloads, license keys, receipts, and order status in one place.";
+    [StringLength(300)] public string LibrarySubtitle { get; set; } = "Downloads, streaming media, license keys, receipts, and order status in one place.";
     [StringLength(120)] public string ConfirmationTitle { get; set; } = "Your purchase is ready";
-    [StringLength(500)] public string ConfirmationMessage { get; set; } = "Payment is confirmed. Your files and license keys are now available.";
-    [StringLength(1000)] public string FooterText { get; set; } = "Payments and delivery are processed securely by this BTCPay Server.";
+    [StringLength(500)] public string ConfirmationMessage { get; set; } = "Payment is confirmed. Your protected products and license keys are now available.";
+    [StringLength(1000)] public string FooterText { get; set; } = "Payments, streaming, and delivery are processed securely by this BTCPay Server.";
     [Url, StringLength(500)] public string? PrivacyUrl { get; set; }
     [RegularExpression("^#[0-9a-fA-F]{6}$")] public string AccentColor { get; set; } = "#155EEF";
     [RegularExpression("^#[0-9a-fA-F]{6}$")] public string AccentTextColor { get; set; } = "#FFFFFF";
@@ -98,8 +137,8 @@ public sealed class DigitalDownloadsSettings
     public bool LockToFirstIp { get; set; }
     public bool DeliverOnProcessing { get; set; }
     public bool EmailDeliveryEnabled { get; set; } = true;
-    [StringLength(200)] public string EmailSubject { get; set; } = "Your download from {StoreName}";
-    public string EmailHtml { get; set; } = "<p>Thanks for your purchase of <strong>{ProductName}</strong>.</p><p><a href=\"{DownloadUrl}\">Download your file</a></p><p>This link expires {ExpiresAt}.</p>";
+    [StringLength(200)] public string EmailSubject { get; set; } = "Your digital product from {StoreName}";
+    public string EmailHtml { get; set; } = "<p>Thanks for your purchase of <strong>{ProductName}</strong>.</p><p><a href=\"{DownloadUrl}\">Open your protected product</a></p><p>This link expires {ExpiresAt}.</p>";
     [Url, StringLength(500)] public string? TermsUrl { get; set; }
     [StringLength(200)] public string PromotionText { get; set; } = "Created by MakePay.io — accept 90+ currencies in a decentralized way with BTCPay Server.";
     public bool ShowMakePayPromotion { get; set; } = true;
@@ -133,6 +172,10 @@ public sealed class DigitalDownloadsSettings
     public static List<DigitalStoreCategory> DefaultCategories() =>
     [
         new() { Id = "downloads", Name = "Downloads", Slug = "downloads", Rule = DigitalStoreCategoryRule.Downloads },
+        new() { Id = "ebooks", Name = "Ebooks", Slug = "ebooks", Rule = DigitalStoreCategoryRule.PdfEbooks },
+        new() { Id = "audio", Name = "Music & Audio", Slug = "audio", Rule = DigitalStoreCategoryRule.Audio },
+        new() { Id = "video", Name = "Video", Slug = "video", Rule = DigitalStoreCategoryRule.Video },
+        new() { Id = "photos-art", Name = "Photos & Art", Slug = "photos-art", Rule = DigitalStoreCategoryRule.PhotosArt },
         new() { Id = "licenses", Name = "Licenses", Slug = "licenses", Rule = DigitalStoreCategoryRule.Licenses }
     ];
 }
@@ -146,8 +189,16 @@ public sealed class DigitalProduct
     [Range(0.00000001, 1000000000)] public decimal Price { get; set; }
     [Range(0.00000001, 1000000000)] public decimal? CompareAtPrice { get; set; }
     [StringLength(80)] public string? Badge { get; set; }
-    [Url, StringLength(500)] public string? ImageUrl { get; set; }
+    [StringLength(500)] public string? ImageUrl { get; set; }
     public bool Active { get; set; } = true;
+    public DigitalProductType ProductType { get; set; } = DigitalProductType.FileDownload;
+    public DigitalDeliveryMode DeliveryMode { get; set; } = DigitalDeliveryMode.Download;
+    [StringLength(160)] public string? Creator { get; set; }
+    [StringLength(160)] public string? Edition { get; set; }
+    [Range(1, 100000)] public int? PageCount { get; set; }
+    [Range(1, 864000)] public int? DurationSeconds { get; set; }
+    [Range(1, 100000)] public int? AssetCount { get; set; }
+    [StringLength(160)] public string? MediaDetails { get; set; }
     public ProductStorageKind StorageKind { get; set; }
     [StringLength(1000)] public string? StorageLocation { get; set; }
     [StringLength(260)] public string DownloadFileName { get; set; } = "download.bin";
@@ -155,6 +206,13 @@ public sealed class DigitalProduct
     public long? FileSize { get; set; }
     [Range(0, 10000)] public int? DownloadLimit { get; set; }
     [Range(1, 8760)] public int? LinkHours { get; set; }
+    public bool PreviewEnabled { get; set; }
+    [StringLength(160)] public string PreviewHeading { get; set; } = "Preview";
+    public List<DigitalProductPreviewAsset> PreviewAssets { get; set; } = [];
+    public bool WatermarkPreviews { get; set; } = true;
+    [StringLength(120)] public string WatermarkText { get; set; } = "PREVIEW";
+    [Range(320, 4096)] public int PreviewMaxWidth { get; set; } = 1600;
+    [Range(40, 100)] public int PreviewQuality { get; set; } = 82;
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
@@ -162,6 +220,56 @@ public sealed class DigitalProduct
 public sealed class DigitalCatalog
 {
     public List<DigitalProduct> Products { get; set; } = [];
+}
+
+public sealed class DigitalProductSnapshot
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "Digital product";
+    public string? ImageUrl { get; set; }
+    public DigitalProductType ProductType { get; set; }
+    public DigitalDeliveryMode DeliveryMode { get; set; }
+    public ProductStorageKind StorageKind { get; set; }
+    public string? StorageLocation { get; set; }
+    public string DownloadFileName { get; set; } = "download.bin";
+    public string ContentType { get; set; } = "application/octet-stream";
+    public long? FileSize { get; set; }
+    public int? DownloadLimit { get; set; }
+    public int? LinkHours { get; set; }
+
+    public static DigitalProductSnapshot From(DigitalProduct product) => new()
+    {
+        Id = product.Id,
+        Name = product.Name,
+        ImageUrl = product.ImageUrl,
+        ProductType = product.ProductType,
+        DeliveryMode = product.DeliveryMode,
+        StorageKind = product.StorageKind,
+        StorageLocation = product.StorageLocation,
+        DownloadFileName = product.DownloadFileName,
+        ContentType = product.ContentType,
+        FileSize = product.FileSize,
+        DownloadLimit = product.DownloadLimit,
+        LinkHours = product.LinkHours
+    };
+
+    public DigitalProduct ToProduct() => new()
+    {
+        Id = Id,
+        Name = Name,
+        Slug = string.IsNullOrWhiteSpace(Id) ? "purchased-product" : string.Concat(Id.ToLowerInvariant().Where(char.IsLetterOrDigit)),
+        ImageUrl = ImageUrl,
+        ProductType = ProductType,
+        DeliveryMode = DeliveryMode,
+        StorageKind = StorageKind,
+        StorageLocation = StorageLocation,
+        DownloadFileName = DownloadFileName,
+        ContentType = ContentType,
+        FileSize = FileSize,
+        DownloadLimit = DownloadLimit,
+        LinkHours = LinkHours,
+        Price = 1m
+    };
 }
 
 public enum DigitalOrderStatus
@@ -191,6 +299,8 @@ public sealed class DigitalOrder
     public string? ProtectedToken { get; set; }
     public string? FirstIpHash { get; set; }
     public DateTimeOffset? LastDownloadAt { get; set; }
+    public DateTimeOffset? LastStreamAt { get; set; }
+    public DigitalProductSnapshot? ProductSnapshot { get; set; }
     public bool DeliveryEmailQueued { get; set; }
 }
 
@@ -216,6 +326,7 @@ public sealed class DigitalCheckoutLine
     public string? ImageUrl { get; set; }
     public int Quantity { get; set; }
     public decimal UnitPrice { get; set; }
+    public DigitalProductSnapshot? DigitalProductSnapshot { get; set; }
     public decimal Total => UnitPrice * Quantity;
 }
 
@@ -323,6 +434,11 @@ public sealed class StoreProductViewModel
     public string? Badge { get; init; }
     public string? ImageUrl { get; init; }
     public string Meta { get; init; } = "";
+    public DigitalProductType? ProductType { get; init; }
+    public DigitalDeliveryMode? DeliveryMode { get; init; }
+    public bool HasPreview { get; init; }
+    public int PreviewCount { get; init; }
+    public DigitalProductSnapshot? DigitalProductSnapshot { get; init; }
 }
 
 public sealed class DigitalProductDetailViewModel
@@ -330,6 +446,7 @@ public sealed class DigitalProductDetailViewModel
     public required string StoreId { get; init; }
     public required DigitalDownloadsSettings Settings { get; init; }
     public required StoreProductViewModel Product { get; init; }
+    public DigitalProduct? DigitalProduct { get; init; }
     public required IReadOnlyList<DigitalStoreCategoryViewModel> Categories { get; init; }
     public required IReadOnlyList<StoreProductViewModel> RelatedProducts { get; init; }
     public int CartCount { get; init; }
@@ -375,6 +492,7 @@ public sealed class CustomerDownloadViewModel
     public required DigitalOrder Order { get; init; }
     public required DigitalProduct Product { get; init; }
     public string? DownloadUrl { get; init; }
+    public string? StreamUrl { get; init; }
 }
 
 public sealed class CustomerLicenseViewModel
@@ -414,4 +532,5 @@ public sealed class OrderViewModel
     public required DigitalProduct Product { get; init; }
     public required DigitalOrder Order { get; init; }
     public string? DownloadUrl { get; init; }
+    public string? StreamUrl { get; init; }
 }

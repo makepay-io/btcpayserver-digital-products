@@ -73,7 +73,7 @@ public sealed class DigitalCheckoutFulfillmentService(
                 {
                     if (line.Kind == DigitalProductKind.Download)
                     {
-                        var product = await downloads.GetProduct(checkout.StoreId, line.ProductId);
+                        var product = line.DigitalProductSnapshot?.ToProduct() ?? await downloads.GetProduct(checkout.StoreId, line.ProductId);
                         if (product is null) continue;
                         var orderId = $"{checkout.Id}-d-{lineIndex}-{itemIndex}";
                         var order = await downloads.GetOrder(checkout.StoreId, orderId);
@@ -94,7 +94,8 @@ public sealed class DigitalCheckoutFulfillmentService(
                                 ExpiresAt = DateTimeOffset.UtcNow.AddHours(product.LinkHours ?? settings.DefaultLinkHours),
                                 MaxDownloads = product.DownloadLimit ?? settings.DefaultDownloadLimit,
                                 TokenHash = created.Hash,
-                                ProtectedToken = created.ProtectedToken
+                                ProtectedToken = created.ProtectedToken,
+                                ProductSnapshot = line.DigitalProductSnapshot ?? DigitalProductSnapshot.From(product)
                             };
                             await downloads.SaveOrder(checkout.StoreId, order);
                         }
