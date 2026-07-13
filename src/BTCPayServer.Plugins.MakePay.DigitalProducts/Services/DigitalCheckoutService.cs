@@ -14,6 +14,7 @@ public sealed class DigitalCheckoutService
         {
             Kind = DigitalProductKind.Download,
             Id = product.Id,
+            Slug = product.Slug,
             Name = product.Name,
             Description = product.Description,
             Price = product.Price,
@@ -25,6 +26,7 @@ public sealed class DigitalCheckoutService
         {
             Kind = DigitalProductKind.License,
             Id = product.Id,
+            Slug = product.Slug,
             Name = product.Name,
             Description = product.Description,
             Price = product.Price,

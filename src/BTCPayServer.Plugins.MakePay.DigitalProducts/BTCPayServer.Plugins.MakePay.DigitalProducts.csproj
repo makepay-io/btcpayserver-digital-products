@@ -7,7 +7,7 @@
     <Product>MakePay Digital Products for BTCPay Server</Product>
     <Description>Protected download and license product storefront, fulfillment, and signed verification APIs.</Description>
     <AssemblyName>BTCPayServer.Plugins.MakePay.DigitalProducts</AssemblyName>
-    <Version>1.1.1</Version>
+    <Version>1.2.0</Version>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <AddRazorSupportForMvc>true</AddRazorSupportForMvc>
     <PreserveCompilationContext>false</PreserveCompilationContext>

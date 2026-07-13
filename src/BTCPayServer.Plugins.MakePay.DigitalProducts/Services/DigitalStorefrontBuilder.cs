@@ -1,0 +1,106 @@
+#nullable enable
+using BTCPayServer.Plugins.MakePay.DigitalProducts.Models;
+
+namespace BTCPayServer.Plugins.MakePay.DigitalProducts.Services;
+
+public static class DigitalStorefrontBuilder
+{
+    public const string EnforcedPromotionText = "Created by MakePay.io — accept 90+ currencies in a decentralized way with BTCPay Server.";
+
+    public static void EnforceMakePayAttribution(DigitalDownloadsSettings settings)
+    {
+        settings.ShowMakePayPromotion = true;
+        settings.PromotionText = EnforcedPromotionText;
+    }
+
+    public static IReadOnlyList<DigitalStoreCategoryViewModel> BuildCategories(
+        DigitalDownloadsSettings settings,
+        IReadOnlyList<StoreProductViewModel> catalog)
+    {
+        var result = new List<DigitalStoreCategoryViewModel>();
+        var slugs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var category in settings.EffectiveStorefrontCategories().Where(category => category.Visible))
+        {
+            if (string.IsNullOrWhiteSpace(category.Name) || string.IsNullOrWhiteSpace(category.Slug) || !slugs.Add(category.Slug)) continue;
+            var references = catalog
+                .Where(product => Matches(category, product))
+                .Select(ProductReference)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (references.Count == 0) continue;
+            result.Add(new DigitalStoreCategoryViewModel
+            {
+                Slug = category.Slug,
+                Name = category.Name,
+                ProductReferences = references
+            });
+        }
+
+        return result;
+    }
+
+    public static IReadOnlyList<StoreProductViewModel> FilterCatalog(
+        IReadOnlyList<StoreProductViewModel> catalog,
+        DigitalStoreCategoryViewModel? category) =>
+        category is null
+            ? catalog
+            : catalog.Where(product => category.ProductReferences.Contains(ProductReference(product))).ToList();
+
+    public static IReadOnlyList<DigitalHeroSlideViewModel> BuildHeroSlides(
+        DigitalDownloadsSettings settings,
+        IReadOnlyList<StoreProductViewModel> catalog,
+        string fallbackImageUrl,
+        Func<StoreProductViewModel, string>? productLink = null)
+    {
+        var products = catalog.ToDictionary(ProductReference, StringComparer.OrdinalIgnoreCase);
+        return settings.EffectiveHeroSlides()
+            .Where(slide => slide.Visible && !string.IsNullOrWhiteSpace(slide.Headline))
+            .Take(12)
+            .Select(slide =>
+            {
+                StoreProductViewModel? product = null;
+                var hasProduct = !string.IsNullOrWhiteSpace(slide.ProductReference) && products.TryGetValue(slide.ProductReference, out product);
+                var link = hasProduct
+                    ? productLink?.Invoke(product!) ?? $"#{ProductAnchor(product!)}"
+                    : IsSafePublicLink(slide.LinkUrl) ? slide.LinkUrl : "#products";
+                return new DigitalHeroSlideViewModel
+                {
+                    Id = slide.Id,
+                    Eyebrow = slide.Eyebrow,
+                    Headline = slide.Headline,
+                    SupportingCopy = slide.SupportingCopy,
+                    ImageUrl = !string.IsNullOrWhiteSpace(slide.ImageUrl) && IsSafePublicResourceUrl(slide.ImageUrl) ? slide.ImageUrl : fallbackImageUrl,
+                    ButtonText = string.IsNullOrWhiteSpace(slide.ButtonText) ? (hasProduct ? $"Explore {product!.Name}" : "Explore products") : slide.ButtonText,
+                    LinkUrl = link
+                };
+            }).ToList();
+    }
+
+    public static string ProductReference(StoreProductViewModel product) => $"{product.Kind}:{product.Id}";
+
+    public static string ProductKindSegment(StoreProductViewModel product) =>
+        product.Kind == DigitalProductKind.License ? "license" : "download";
+
+    public static string ProductAnchor(StoreProductViewModel product)
+    {
+        var id = string.Concat(product.Id.Where(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_'));
+        return $"product-{product.Kind.ToString().ToLowerInvariant()}-{id}";
+    }
+
+    public static bool IsSafePublicResourceUrl(string? value) =>
+        string.IsNullOrWhiteSpace(value) || IsAbsoluteHttpUrl(value) || value.StartsWith('/') && !value.StartsWith("//", StringComparison.Ordinal);
+
+    public static bool IsSafePublicLink(string? value) =>
+        !string.IsNullOrWhiteSpace(value) &&
+        (value.StartsWith('#') || value.StartsWith('/') && !value.StartsWith("//", StringComparison.Ordinal) || IsAbsoluteHttpUrl(value));
+
+    private static bool Matches(DigitalStoreCategory category, StoreProductViewModel product) => category.Rule switch
+    {
+        DigitalStoreCategoryRule.Downloads => product.Kind == DigitalProductKind.Download,
+        DigitalStoreCategoryRule.Licenses => product.Kind == DigitalProductKind.License,
+        _ => category.ProductReferences.Contains(ProductReference(product), StringComparer.OrdinalIgnoreCase)
+    };
+
+    private static bool IsAbsoluteHttpUrl(string value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https";
+}

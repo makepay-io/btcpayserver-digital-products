@@ -9,11 +9,18 @@ public sealed class DigitalDownloadsRepository(StoreRepository stores)
 {
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new(StringComparer.OrdinalIgnoreCase);
 
-    public async Task<DigitalDownloadsSettings> GetSettings(string storeId) =>
-        await stores.GetSettingAsync<DigitalDownloadsSettings>(storeId, DigitalProductsPlugin.SettingsKey) ?? new();
+    public async Task<DigitalDownloadsSettings> GetSettings(string storeId)
+    {
+        var settings = await stores.GetSettingAsync<DigitalDownloadsSettings>(storeId, DigitalProductsPlugin.SettingsKey) ?? new();
+        DigitalStorefrontBuilder.EnforceMakePayAttribution(settings);
+        return settings;
+    }
 
-    public Task SaveSettings(string storeId, DigitalDownloadsSettings settings) =>
-        stores.UpdateSetting(storeId, DigitalProductsPlugin.SettingsKey, settings);
+    public Task SaveSettings(string storeId, DigitalDownloadsSettings settings)
+    {
+        DigitalStorefrontBuilder.EnforceMakePayAttribution(settings);
+        return stores.UpdateSetting(storeId, DigitalProductsPlugin.SettingsKey, settings);
+    }
 
     public async Task<IReadOnlyList<DigitalProduct>> GetProducts(string storeId) =>
         (await stores.GetSettingAsync<DigitalCatalog>(storeId, DigitalProductsPlugin.CatalogKey) ?? new()).Products

@@ -57,14 +57,28 @@ public sealed class DigitalDownloadsPublicController(
         return stream is null ? NotFound() : File(stream, "image/png");
     }
 
+    [HttpGet("assets/storefront/{assetId}/{fileName}")]
+    [ResponseCache(Duration = 86400, Location = ResponseCacheLocation.Any)]
+    public IActionResult StorefrontAsset(string storeId, string assetId, string fileName)
+    {
+        var asset = files.OpenStorefrontAsset(storeId, assetId, fileName);
+        if (asset is null) return NotFound();
+        Response.RegisterForDisposeAsync(asset);
+        Response.ContentLength = asset.Length;
+        return File(asset.Stream, asset.ContentType, enableRangeProcessing: true);
+    }
+
     [HttpGet("")]
-    public async Task<IActionResult> Storefront(string storeId, string? type)
+    public async Task<IActionResult> Storefront(string storeId, string? category, string? type)
     {
         if (await stores.FindStore(storeId) is null) return NotFound();
         var settings = await repository.GetSettings(storeId);
         var catalog = await Catalog(storeId);
-        if (type?.Equals("downloads", StringComparison.OrdinalIgnoreCase) == true) catalog = catalog.Where(product => product.Kind == DigitalProductKind.Download).ToList();
-        if (type?.Equals("licenses", StringComparison.OrdinalIgnoreCase) == true) catalog = catalog.Where(product => product.Kind == DigitalProductKind.License).ToList();
+        var categories = DigitalStorefrontBuilder.BuildCategories(settings, catalog);
+        category ??= type?.Equals("downloads", StringComparison.OrdinalIgnoreCase) == true ? "downloads" :
+            type?.Equals("licenses", StringComparison.OrdinalIgnoreCase) == true ? "licenses" : null;
+        var selectedCategory = categories.FirstOrDefault(item => item.Slug.Equals(category, StringComparison.OrdinalIgnoreCase));
+        var fallbackHeroUrl = Url.Action(nameof(HeroAsset), new { storeId })!;
         return View("~/Views/DigitalDownloads/Public/Storefront.cshtml", new StorefrontViewModel
         {
             StoreId = storeId,
@@ -72,7 +86,61 @@ public sealed class DigitalDownloadsPublicController(
             Products = await repository.GetProducts(storeId),
             LicenseSettings = await licenses.GetSettings(storeId),
             LicenseProducts = await licenses.GetProducts(storeId),
-            Catalog = catalog,
+            Catalog = DigitalStorefrontBuilder.FilterCatalog(catalog, selectedCategory),
+            HeroSlides = DigitalStorefrontBuilder.BuildHeroSlides(settings, catalog, fallbackHeroUrl,
+                product => Url.Action(nameof(Product), new
+                {
+                    storeId,
+                    kind = DigitalStorefrontBuilder.ProductKindSegment(product),
+                    productId = product.Slug
+                })!),
+            Categories = categories,
+            ActiveCategorySlug = selectedCategory?.Slug,
+            CartCount = Cart(storeId).Lines.Sum(line => line.Quantity),
+            CustomerEmail = CustomerEmail(storeId)
+        });
+    }
+
+    [HttpGet("products/{kind}/{productId}")]
+    public async Task<IActionResult> Product(string storeId, string kind, string productId)
+    {
+        if (await stores.FindStore(storeId) is null) return NotFound();
+        var productKind = kind.Equals("download", StringComparison.OrdinalIgnoreCase)
+            ? DigitalProductKind.Download
+            : kind.Equals("license", StringComparison.OrdinalIgnoreCase)
+                ? DigitalProductKind.License
+                : (DigitalProductKind?)null;
+        if (productKind is null) return NotFound();
+
+        var settings = await repository.GetSettings(storeId);
+        var catalog = await Catalog(storeId);
+        var product = catalog.FirstOrDefault(item =>
+            item.Kind == productKind &&
+            (item.Id.Equals(productId, StringComparison.OrdinalIgnoreCase) ||
+             item.Slug.Equals(productId, StringComparison.OrdinalIgnoreCase)));
+        if (product is null) return NotFound();
+
+        var categories = DigitalStorefrontBuilder.BuildCategories(settings, catalog);
+        var productReference = DigitalStorefrontBuilder.ProductReference(product);
+        var relatedReferences = categories
+            .Where(category => category.ProductReferences.Contains(productReference))
+            .SelectMany(category => category.ProductReferences)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var related = catalog
+            .Where(item => !item.Id.Equals(product.Id, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(item => relatedReferences.Contains(DigitalStorefrontBuilder.ProductReference(item)))
+            .ThenBy(item => item.Kind)
+            .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+            .Take(3)
+            .ToList();
+
+        return View("~/Views/DigitalDownloads/Public/Product.cshtml", new DigitalProductDetailViewModel
+        {
+            StoreId = storeId,
+            Settings = settings,
+            Product = product,
+            Categories = categories,
+            RelatedProducts = related,
             CartCount = Cart(storeId).Lines.Sum(line => line.Quantity),
             CustomerEmail = CustomerEmail(storeId)
         });
