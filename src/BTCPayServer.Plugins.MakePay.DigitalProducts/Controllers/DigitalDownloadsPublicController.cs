@@ -36,6 +36,27 @@ public sealed class DigitalDownloadsPublicController(
     LicenseSecurityService licenseSecurity,
     EmailSenderFactory emailFactory) : Controller
 {
+    [HttpGet("assets/hero")]
+    [ResponseCache(Duration = 86400, Location = ResponseCacheLocation.Any)]
+    public IActionResult HeroAsset()
+    {
+        var stream = typeof(DigitalProductsPlugin).Assembly.GetManifestResourceStream(
+            "BTCPayServer.Plugins.MakePay.DigitalProducts.Assets.makepay-digital-hero.png");
+        return stream is null ? NotFound() : File(stream, "image/png");
+    }
+
+    [HttpGet("assets/product/{kind}")]
+    [ResponseCache(Duration = 86400, Location = ResponseCacheLocation.Any)]
+    public IActionResult ProductAsset(string kind)
+    {
+        var fileName = kind.Equals("license", StringComparison.OrdinalIgnoreCase)
+            ? "makepay-license-cover.png"
+            : "makepay-download-cover.png";
+        var stream = typeof(DigitalProductsPlugin).Assembly.GetManifestResourceStream(
+            "BTCPayServer.Plugins.MakePay.DigitalProducts.Assets." + fileName);
+        return stream is null ? NotFound() : File(stream, "image/png");
+    }
+
     [HttpGet("")]
     public async Task<IActionResult> Storefront(string storeId, string? type)
     {
