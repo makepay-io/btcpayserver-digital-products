@@ -1,0 +1,89 @@
+@model DigitalPaymentViewModel
+@{ Layout = null; }
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="referrer" content="no-referrer">
+    <title>Payment · @Model.Settings.StorefrontTitle</title>
+    <partial name="~/Views/DigitalDownloads/Public/_Theme.cshtml" model="Model.Settings" />
+</head>
+<body class="dp-public">
+<main class="dp-shell">
+    <header class="dp-topbar">
+        <a class="dp-topbar-brand" asp-action="Storefront" asp-route-storeId="@Model.StoreId">@Model.Settings.StorefrontTitle</a>
+        <nav class="dp-topnav"><a class="dp-nav-link" asp-action="Account" asp-route-storeId="@Model.StoreId">Purchases</a></nav>
+    </header>
+    <section class="dp-payment-card" aria-live="polite">
+        <img class="dp-btcpay-logo" src="~/img/btcpay-logo.svg" alt="BTCPay Server">
+        <div class="dp-spinner" id="payment-spinner"></div>
+        <p class="dp-eyebrow">Secure checkout</p>
+        <h2 id="payment-title">Opening BTCPay checkout</h2>
+        <p class="dp-section-copy">Complete your payment in the BTCPay modal. This page will unlock your products as soon as the invoice is settled.</p>
+        <button class="dp-primary" id="open-checkout" type="button">Open checkout</button>
+        <span class="dp-payment-state" id="payment-state">Order @Model.Checkout.Id[..8] · @Model.Checkout.Total.ToString("0.00") @Model.Checkout.Currency</span>
+    </section>
+    <div class="dp-status-message" id="payment-error" role="alert"></div>
+    <p class="dp-payment-help">You can safely reopen the checkout if it closes before payment. Your cart and invoice are kept on the server.</p>
+    <partial name="~/Views/DigitalDownloads/Public/_Footer.cshtml" model="Model.Settings" />
+</main>
+<script src="~/modal/btcpay.js"></script>
+<script>
+(() => {
+    const invoiceId = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Checkout.InvoiceId));
+    const statusUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("CheckoutStatus", new { storeId = Model.StoreId, checkoutId = Model.Checkout.Id, accessToken = Model.AccessToken })));
+    const openButton = document.getElementById('open-checkout');
+    const title = document.getElementById('payment-title');
+    const state = document.getElementById('payment-state');
+    const error = document.getElementById('payment-error');
+    let finished = false;
+
+    const showCheckout = () => {
+        error.style.display = 'none';
+        if (!invoiceId || !window.btcpay) {
+            error.textContent = 'BTCPay checkout is temporarily unavailable. Refresh this page and try again.';
+            error.style.display = 'block';
+            return;
+        }
+        window.btcpay.showInvoice(invoiceId);
+    };
+
+    const poll = async () => {
+        if (finished) return;
+        try {
+            const response = await fetch(statusUrl, { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
+            if (!response.ok) throw new Error('status');
+            const result = await response.json();
+            state.textContent = result.message;
+            if (result.status === 'paid' && result.redirectUrl) {
+                finished = true;
+                title.textContent = 'Payment received';
+                window.location.assign(result.redirectUrl);
+                return;
+            }
+            if (result.status === 'cancelled') {
+                finished = true;
+                title.textContent = 'Invoice closed';
+                error.textContent = result.message;
+                error.style.display = 'block';
+                return;
+            }
+        } catch {
+            state.textContent = 'Still checking your payment status…';
+        }
+        window.setTimeout(poll, 2200);
+    };
+
+    openButton.addEventListener('click', showCheckout);
+    if (window.btcpay?.onModalReceiveMessage) {
+        window.btcpay.onModalReceiveMessage(event => {
+            if (!event || event.invoiceId === invoiceId) poll();
+        });
+    }
+    showCheckout();
+    poll();
+})();
+</script>
+</body>
+</html>

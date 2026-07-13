@@ -66,6 +66,50 @@ public sealed class DigitalDownloadsRepository(StoreRepository stores)
         return result;
     }
 
+    public async Task<IReadOnlyList<DigitalCheckout>> GetCheckouts(string storeId) =>
+        (await stores.GetSettingAsync<DigitalCheckoutCollection>(storeId, DigitalProductsPlugin.CheckoutsKey) ?? new()).Checkouts.Values
+        .OrderByDescending(checkout => checkout.CreatedAt).ToList();
+
+    public async Task<DigitalCheckout?> GetCheckout(string storeId, string checkoutId) =>
+        (await stores.GetSettingAsync<DigitalCheckoutCollection>(storeId, DigitalProductsPlugin.CheckoutsKey) ?? new()).Checkouts.GetValueOrDefault(checkoutId);
+
+    public Task SaveCheckout(string storeId, DigitalCheckout checkout) =>
+        Mutate(storeId, DigitalProductsPlugin.CheckoutsKey, (DigitalCheckoutCollection value) => value.Checkouts[checkout.Id] = checkout);
+
+    public async Task<DigitalCheckout?> UpdateCheckout(string storeId, string checkoutId, Func<DigitalCheckout, bool> mutation)
+    {
+        DigitalCheckout? result = null;
+        await Mutate(storeId, DigitalProductsPlugin.CheckoutsKey, (DigitalCheckoutCollection value) =>
+        {
+            if (!value.Checkouts.TryGetValue(checkoutId, out var checkout) || !mutation(checkout)) return;
+            result = checkout;
+        });
+        return result;
+    }
+
+    public Task SaveLoginChallenge(string storeId, CustomerLoginChallenge challenge) =>
+        Mutate(storeId, DigitalProductsPlugin.LoginChallengesKey, (CustomerLoginChallengeCollection value) =>
+        {
+            foreach (var stale in value.Challenges.Values.Where(item => item.ExpiresAt < DateTimeOffset.UtcNow.AddHours(-1)).Select(item => item.Id).ToList()) value.Challenges.Remove(stale);
+            value.Challenges[challenge.Id] = challenge;
+        });
+
+    public async Task<CustomerLoginChallenge?> GetLatestLoginChallenge(string storeId, string normalizedEmail) =>
+        (await stores.GetSettingAsync<CustomerLoginChallengeCollection>(storeId, DigitalProductsPlugin.LoginChallengesKey) ?? new()).Challenges.Values
+        .Where(challenge => challenge.NormalizedEmail == normalizedEmail && challenge.ConsumedAt is null)
+        .OrderByDescending(challenge => challenge.CreatedAt).FirstOrDefault();
+
+    public async Task<CustomerLoginChallenge?> UpdateLoginChallenge(string storeId, string challengeId, Func<CustomerLoginChallenge, bool> mutation)
+    {
+        CustomerLoginChallenge? result = null;
+        await Mutate(storeId, DigitalProductsPlugin.LoginChallengesKey, (CustomerLoginChallengeCollection value) =>
+        {
+            if (!value.Challenges.TryGetValue(challengeId, out var challenge) || !mutation(challenge)) return;
+            result = challenge;
+        });
+        return result;
+    }
+
     private async Task MutateCatalog(string storeId, Action<DigitalCatalog> mutation)
     {
         var gate = _locks.GetOrAdd(storeId + ":catalog", _ => new SemaphoreSlim(1, 1));
@@ -88,6 +132,19 @@ public sealed class DigitalDownloadsRepository(StoreRepository stores)
             var orders = await stores.GetSettingAsync<DigitalOrderCollection>(storeId, DigitalProductsPlugin.OrdersKey) ?? new();
             mutation(orders);
             await stores.UpdateSetting(storeId, DigitalProductsPlugin.OrdersKey, orders);
+        }
+        finally { gate.Release(); }
+    }
+
+    private async Task Mutate<T>(string storeId, string key, Action<T> mutation) where T : class, new()
+    {
+        var gate = _locks.GetOrAdd(storeId + ":" + key, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync();
+        try
+        {
+            var value = await stores.GetSettingAsync<T>(storeId, key) ?? new();
+            mutation(value);
+            await stores.UpdateSetting(storeId, key, value);
         }
         finally { gate.Release(); }
     }

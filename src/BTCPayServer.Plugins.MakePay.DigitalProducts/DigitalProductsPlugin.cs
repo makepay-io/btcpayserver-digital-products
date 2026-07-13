@@ -10,10 +10,12 @@ namespace BTCPayServer.Plugins.MakePay.DigitalProducts;
 
 public sealed class DigitalProductsPlugin : BaseBTCPayServerPlugin
 {
-    public const string PluginVersion = "1.0.0";
+    public const string PluginVersion = "1.1.0";
     public const string SettingsKey = "MakePay.DigitalDownloads.Settings";
     public const string CatalogKey = "MakePay.DigitalDownloads.Catalog";
     public const string OrdersKey = "MakePay.DigitalDownloads.Orders";
+    public const string CheckoutsKey = "MakePay.DigitalProducts.Checkouts";
+    public const string LoginChallengesKey = "MakePay.DigitalProducts.LoginChallenges";
 
     public override string Identifier => "BTCPayServer.Plugins.MakePay.DigitalProducts";
     public override string Name => "MakePay Digital Products";
@@ -28,6 +30,9 @@ public sealed class DigitalProductsPlugin : BaseBTCPayServerPlugin
     {
         services.AddSingleton<DigitalDownloadsRepository>();
         services.AddSingleton<DownloadTokenService>();
+        services.AddSingleton<CustomerAccessService>();
+        services.AddSingleton<DigitalCartService>();
+        services.AddSingleton<DigitalCheckoutService>();
         services.AddHttpClient<ProductFileService>()
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
         services.AddSingleton<DigitalDeliveryService>();
@@ -37,6 +42,8 @@ public sealed class DigitalProductsPlugin : BaseBTCPayServerPlugin
         services.AddSingleton<LicenseSecurityService>();
         services.AddSingleton<LicenseFulfillmentService>();
         services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<LicenseFulfillmentService>());
+        services.AddSingleton<DigitalCheckoutFulfillmentService>();
+        services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<DigitalCheckoutFulfillmentService>());
         services.AddUIExtension("store-integrations-nav", "DigitalDownloads/StoreNavExtension");
         base.Execute(services);
     }
