@@ -3,6 +3,7 @@
     Layout = null;
     ViewData["StoreId"] = Model.StoreId;
     var mediaScriptUrl = Url.Action("Asset", "DigitalDownloadsAssets", new { storeId = Model.StoreId, fileName = "makepay-media.js" });
+    var analytics = new DigitalAnalyticsViewModel { StoreId = Model.StoreId, Settings = Model.Settings, PageType = "account" };
 }
 <!doctype html>
 <html lang="en">
@@ -12,6 +13,7 @@
     <meta name="referrer" content="no-referrer">
     <title>Purchases · @Model.Settings.StorefrontTitle</title>
     <partial name="~/Views/DigitalDownloads/Public/_Theme.cshtml" model="Model.Settings" />
+    <partial name="~/Views/DigitalDownloads/Public/_AnalyticsHead.cshtml" model="analytics" />
 </head>
 <body class="dp-public">
 <main class="dp-shell">
@@ -37,6 +39,7 @@
     <section class="dp-order-list"><p class="dp-eyebrow">Purchase history</p><div class="dp-card">@if(Model.Purchases.Count==0){<div class="dp-library-item"><p class="dp-library-meta">Your completed checkouts will appear here.</p></div>}@foreach(var purchase in Model.Purchases.OrderByDescending(item=>item.CreatedAt)){<div class="dp-order-row"><div><strong>@purchase.Lines.Sum(line=>line.Quantity) product@(purchase.Lines.Sum(line=>line.Quantity)==1?"":"s")</strong><div class="dp-library-meta">@purchase.CreatedAt.ToString("d MMM yyyy") · @purchase.Id[..8]</div></div><strong>@purchase.Total.ToString("0.00") @purchase.Currency</strong><span class="dp-status @(purchase.Status==DigitalCheckoutStatus.Paid?"paid":"")">@purchase.Status</span></div>}</div></section>
     <partial name="~/Views/DigitalDownloads/Public/_Footer.cshtml" model="Model.Settings" />
 </main>
+<partial name="~/Views/DigitalDownloads/Public/_AnalyticsConsent.cshtml" model="analytics" />
 <script src="@mediaScriptUrl" defer></script>
 </body>
 </html>

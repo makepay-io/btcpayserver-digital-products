@@ -1,4 +1,4 @@
-# Design QA — Digital Products 1.3.0
+# Design QA — Digital Products 1.4.0
 
 ## Grounding
 
@@ -27,12 +27,12 @@
 - PDF, audio, video, and art preview assets return the expected MIME types. Audio/video range requests return HTTP 206 with valid `Content-Range`; invalid ranges return HTTP 416.
 - Protected delivery enforces paid status, token expiry, optional IP lock, delivery mode, download limits, and restart-aware range accounting. A byte-zero range restart consumes a new allowance while later byte offsets may finish the counted transfer.
 - Bundled same-origin PDF.js runtime and worker assets load successfully without a third-party CDN dependency.
-- MakePay Digital Products 1.3.0 starts successfully in BTCPay Server 2.3.5 and serves the simulated six-product catalog.
+- MakePay Digital Products 1.4.0 starts successfully in BTCPay Server 2.3.5 and serves the simulated six-product catalog.
 
 ## Automated verification
 
 - Release build and Razor compilation: passed.
-- Automated tests: 57 passed, 0 failed.
+- Automated tests: 63 passed, 0 failed.
 - JavaScript syntax and `git diff --check`: passed.
 - Only observed build warning is the upstream BTCPay Server MailKit 4.8.0 NU1902 advisory; it is not introduced by this plugin change.
 

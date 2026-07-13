@@ -5,6 +5,7 @@
     var waiting = Model.Order.Status == DigitalOrderStatus.Pending;
     var expired = Model.Order.ExpiresAt is { } expiresAt && expiresAt <= DateTimeOffset.UtcNow;
     var typeLabel = DigitalStorefrontBuilder.ProductTypeLabel(Model.Product.ProductType);
+    var analytics = new DigitalAnalyticsViewModel { StoreId = storeId, Settings = Model.Settings, PageType = "order" };
     var mediaScriptUrl = Url.Action("Asset", "DigitalDownloadsAssets", new { storeId, fileName = "makepay-media.js" });
     var pdfLibraryUrl = Url.Action("Asset", "DigitalDownloadsAssets", new { storeId, fileName = "pdf.min.mjs" });
     var pdfWorkerUrl = Url.Action("Asset", "DigitalDownloadsAssets", new { storeId, fileName = "pdf.worker.min.mjs" });
@@ -38,6 +39,7 @@
     @if(waiting){<meta http-equiv="refresh" content="10">}
     <title>@Model.Product.Name · @Model.Settings.StorefrontTitle</title>
     <partial name="~/Views/DigitalDownloads/Public/_Theme.cshtml" model="Model.Settings" />
+    <partial name="~/Views/DigitalDownloads/Public/_AnalyticsHead.cshtml" model="analytics" />
     <style>
         .dp-order-shell{min-height:100vh;padding:30px 18px;background:var(--dp-soft)}.dp-order-card{width:min(100%,940px);margin:0 auto;border:1px solid var(--dp-border);border-radius:20px;background:var(--dp-surface);padding:clamp(24px,5vw,48px);box-shadow:0 22px 60px rgba(16,24,40,.1)}.dp-order-card .dp-topbar-brand{display:inline-flex;margin-bottom:34px}.dp-order-header{margin-bottom:26px}.dp-order-header h1{margin:0;font-size:clamp(2rem,5vw,3.5rem);line-height:1;letter-spacing:-.045em}.dp-order-header>p:not(.dp-eyebrow){max-width:660px;color:var(--dp-muted)}.dp-order-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:20px}.dp-order-player{margin-top:24px}.dp-order-player audio{width:100%;accent-color:var(--dp-accent)}.dp-order-player video{display:block;width:100%;max-height:560px;border-radius:14px;background:#080f1d}.dp-order-help{margin-top:20px;padding-top:18px;border-top:1px solid var(--dp-border);color:var(--dp-muted);font-size:.82rem}.dp-order-card .dp-pdf-stage{min-height:480px}
         @@media(max-width:600px){.dp-order-card{padding:24px 18px}.dp-order-actions{align-items:stretch;flex-direction:column}.dp-order-actions>*{width:100%}.dp-order-card .dp-pdf-stage{min-height:380px}}
@@ -78,6 +80,7 @@
         <div class="dp-spinner"></div><p>We are waiting for payment confirmation. This page refreshes automatically.</p><p class="dp-auth-help">Order @Model.Order.Id[..8]</p>
     }
 </section></main>
+<partial name="~/Views/DigitalDownloads/Public/_AnalyticsConsent.cshtml" model="analytics" />
 <script src="@mediaScriptUrl" defer></script>
 </body>
 </html>
