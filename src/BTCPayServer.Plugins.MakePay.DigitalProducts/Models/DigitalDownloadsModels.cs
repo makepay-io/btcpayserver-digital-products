@@ -403,6 +403,11 @@ public sealed class DigitalDownloadsDashboardViewModel
     public required DigitalDownloadsSettings Settings { get; init; }
     public required IReadOnlyList<DigitalProduct> Products { get; init; }
     public required IReadOnlyList<DigitalOrder> Orders { get; init; }
+    public required LicenseManagerSettings LicenseSettings { get; init; }
+    public required IReadOnlyList<LicenseProduct> LicenseProducts { get; init; }
+    public required IReadOnlyList<ManagedLicense> Licenses { get; init; }
+    public required IReadOnlyList<LicenseOrder> LicenseOrders { get; init; }
+    public string ActiveSection { get; init; } = "products";
 }
 
 public sealed class StorefrontViewModel

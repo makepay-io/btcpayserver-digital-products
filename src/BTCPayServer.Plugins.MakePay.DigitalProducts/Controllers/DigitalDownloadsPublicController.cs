@@ -183,10 +183,30 @@ public abstract class DigitalDownloadsPublicControllerBase(
     public async Task<IActionResult> AddToCart(string storeId, DigitalProductKind kind, string productId, int quantity = 1, string? returnUrl = null)
     {
         var catalog = await Catalog(storeId);
-        if (catalog.All(product => product.Kind != kind || !product.Id.Equals(productId, StringComparison.OrdinalIgnoreCase))) return NotFound();
+        var product = catalog.FirstOrDefault(item =>
+            item.Kind == kind && item.Id.Equals(productId, StringComparison.OrdinalIgnoreCase));
+        if (product is null) return NotFound();
         var cart = Cart(storeId);
+        var previousQuantity = cart.Lines.FirstOrDefault(line =>
+            line.Kind == kind && line.ProductId.Equals(productId, StringComparison.OrdinalIgnoreCase))?.Quantity ?? 0;
         carts.Add(cart, kind, productId, quantity);
         SaveCart(storeId, cart);
+        var currentQuantity = cart.Lines.First(line =>
+            line.Kind == kind && line.ProductId.Equals(productId, StringComparison.OrdinalIgnoreCase)).Quantity;
+        if (WantsJsonResponse())
+        {
+            return Json(new
+            {
+                cartCount = cart.Lines.Sum(line => line.Quantity),
+                cartUrl = PublicAction(storeId, nameof(CartPage)),
+                item = new
+                {
+                    name = product.Name,
+                    addedQuantity = Math.Max(0, currentQuantity - previousQuantity),
+                    quantity = currentQuantity
+                }
+            });
+        }
         return Redirect(LocalReturn(returnUrl, PublicAction(storeId, nameof(CartPage))));
     }
 
@@ -625,6 +645,10 @@ public abstract class DigitalDownloadsPublicControllerBase(
                      throw new InvalidOperationException($"Could not generate the Digital Products route for {action}.");
         return PublicUrls.ForRequest(HttpContext, storeId, url);
     }
+
+    private bool WantsJsonResponse() =>
+        Request.Headers.Accept.ToString().Contains("application/json", StringComparison.OrdinalIgnoreCase) ||
+        Request.Headers["X-Requested-With"].ToString().Equals("XMLHttpRequest", StringComparison.OrdinalIgnoreCase);
 
     private async Task<string> PublicAbsolute(string storeId, string action, object? values = null)
     {

@@ -1,10 +1,13 @@
 @model DigitalDownloadsDashboardViewModel
 @inject DisplayFormatter DisplayFormatter
 @{
-    ViewData.SetActivePage("DigitalDownloads", "Digital Products", "Products");
+    var licensesActive = string.Equals(Model.ActiveSection, "licenses", StringComparison.OrdinalIgnoreCase);
+    ViewData.SetActivePage("DigitalDownloads", "Digital Products", licensesActive ? "License keys" : "Products");
     var publishedProducts = Model.Products.Count(product => product.Active);
     var paidOrders = Model.Orders.Count(order => order.Status == DigitalOrderStatus.Paid);
     var deliveries = Model.Orders.Sum(order => order.DownloadCount);
+    var activeLicenses = Model.Licenses.Count(license => license.Status == ManagedLicenseStatus.Active);
+    var licenseActivations = Model.Licenses.Sum(license => license.Activations.Count);
     var productsById = Model.Products.ToDictionary(product => product.Id, StringComparer.OrdinalIgnoreCase);
     var productTypes = Enum.GetValues<DigitalProductType>();
     string TypeIcon(DigitalProductType type) => type switch
@@ -29,27 +32,47 @@
     .mp-badge{display:inline-flex;align-items:center;gap:.3rem;border-radius:999px;padding:.27rem .55rem;font-size:.68rem;font-weight:750;white-space:nowrap}.mp-badge.is-live,.mp-badge.is-paid,.mp-badge.is-ready{background:rgba(var(--btcpay-success-rgb,18,183,106),.12);color:var(--btcpay-success,#067647)}.mp-badge.is-draft,.mp-badge.is-pending{background:var(--mp-soft);color:var(--mp-muted)}.mp-badge.is-warning,.mp-badge.is-expired{background:rgba(var(--btcpay-warning-rgb,247,144,9),.13);color:var(--btcpay-warning-text,#b54708)}.mp-badge.is-revoked{background:rgba(var(--btcpay-danger-rgb,240,68,56),.11);color:var(--btcpay-danger,#b42318)}
     .mp-table-empty{padding:3.2rem 1rem!important;text-align:center}.mp-table-empty svg{width:34px;height:34px;fill:currentColor;color:var(--mp-muted);margin-bottom:.7rem}.mp-table-empty strong{display:block;margin-bottom:.2rem}.mp-table-empty span{display:block;color:var(--mp-muted);font-size:.8rem;margin-bottom:.9rem}.mp-filter-empty{display:none;padding:2rem;text-align:center;color:var(--mp-muted);font-size:.82rem}.mp-filter-empty.is-visible{display:block}
     .mp-order-id{font-size:.73rem}.mp-order-customer{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mp-attribution{display:flex;align-items:flex-start;gap:.7rem;border:1px solid rgba(var(--btcpay-primary-rgb,21,94,239),.2);border-radius:10px;background:rgba(var(--btcpay-primary-rgb,21,94,239),.055);padding:.85rem 1rem;color:var(--mp-muted);font-size:.78rem;line-height:1.45}.mp-attribution svg{width:18px;height:18px;fill:currentColor;color:var(--btcpay-primary,#155eef);flex:none;margin-top:.1rem}
+    .mp-license-product{min-width:220px}.mp-license-product strong{display:block;font-size:.84rem}.mp-license-product span{display:block;color:var(--mp-muted);font-size:.7rem}.mp-license-key{display:inline-block;max-width:240px;overflow-wrap:anywhere}.mp-issue-grid{display:grid;grid-template-columns:minmax(180px,1fr) minmax(220px,1.2fr) auto;gap:.65rem;align-items:end}.mp-issued-key{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}.mp-issued-key code{font-size:.9rem;overflow-wrap:anywhere}
     @@media(max-width:991.98px){.mp-stat-grid{grid-template-columns:1fr 1fr}.mp-panel-head{align-items:stretch;flex-direction:column}.mp-panel-tools{width:100%}.mp-search{flex:1;min-width:180px}}
-    @@media(max-width:575.98px){.mp-stat-grid{grid-template-columns:1fr}.mp-admin-actions{width:100%}.mp-admin-actions .btn-primary{flex:1}.mp-panel-tools{align-items:stretch;flex-direction:column}.mp-search{width:100%}.mp-product-cell{min-width:220px}}
+    @@media(max-width:767.98px){.mp-issue-grid{grid-template-columns:1fr}.mp-issue-grid .btn{width:100%}}
+    @@media(max-width:575.98px){.mp-stat-grid{grid-template-columns:1fr}.mp-admin-actions{width:100%}.mp-admin-actions .btn-primary{flex:1}.mp-panel-tools{align-items:stretch;flex-direction:column}.mp-search{width:100%}.mp-product-cell{min-width:220px}.mp-issued-key{display:block}.mp-issued-key .btn{margin-top:.75rem}}
 </style>
 
 <div class="mp-admin-dashboard">
     <div class="sticky-header d-flex justify-content-between align-items-center">
-        <div class="mp-admin-heading"><h2 class="mb-0">Digital products</h2><p>Sell protected files, ebooks, audio, video, photos, and software licenses with BTCPay.</p></div>
+        <div class="mp-admin-heading"><h2 class="mb-0">Digital products</h2><p>@(licensesActive ? "Generate, issue, verify, and manage software license keys." : "Sell protected files, ebooks, audio, video, photos, and software licenses with BTCPay.")</p></div>
         <div class="mp-admin-actions">
             <a class="btn btn-secondary" target="_blank" rel="noopener" asp-controller="DigitalDownloadsPublic" asp-action="Storefront" asp-route-storeId="@Model.StoreId"><svg class="mp-admin-icon me-1" aria-hidden="true"><use href="/img/icon-sprite.svg#actions-show"></use></svg>View store</a>
-            <a class="btn btn-secondary" asp-action="Settings" asp-route-storeId="@Model.StoreId"><svg class="mp-admin-icon me-1" aria-hidden="true"><use href="/img/icon-sprite.svg#settings"></use></svg>Store settings</a>
-            <a class="btn btn-primary" asp-action="Product" asp-route-storeId="@Model.StoreId"><svg class="mp-admin-icon me-1" aria-hidden="true"><use href="/img/icon-sprite.svg#actions-add"></use></svg>Add product</a>
+            @if (licensesActive)
+            {
+                <a class="btn btn-secondary" asp-controller="LicenseManagerAdmin" asp-action="Settings" asp-route-storeId="@Model.StoreId"><svg class="mp-admin-icon me-1" aria-hidden="true"><use href="/img/icon-sprite.svg#settings"></use></svg>API &amp; email</a>
+                <a class="btn btn-primary" asp-controller="LicenseManagerAdmin" asp-action="Product" asp-route-storeId="@Model.StoreId"><svg class="mp-admin-icon me-1" aria-hidden="true"><use href="/img/icon-sprite.svg#actions-add"></use></svg>Add license product</a>
+            }
+            else
+            {
+                <a class="btn btn-secondary" asp-action="Settings" asp-route-storeId="@Model.StoreId"><svg class="mp-admin-icon me-1" aria-hidden="true"><use href="/img/icon-sprite.svg#settings"></use></svg>Store settings</a>
+                <a class="btn btn-primary" asp-action="Product" asp-route-storeId="@Model.StoreId"><svg class="mp-admin-icon me-1" aria-hidden="true"><use href="/img/icon-sprite.svg#actions-add"></use></svg>Add product</a>
+            }
         </div>
     </div>
 
     <nav class="nav mp-admin-tabs" aria-label="Digital product sections">
-        <a class="nav-link active" aria-current="page" asp-controller="DigitalDownloadsAdmin" asp-action="Index" asp-route-storeId="@Model.StoreId">Products</a>
-        <a class="nav-link" asp-controller="LicenseManagerAdmin" asp-action="Index" asp-route-storeId="@Model.StoreId">License keys</a>
+        <a class="nav-link @(!licensesActive ? "active" : null)" aria-current="@(!licensesActive ? "page" : null)" asp-controller="DigitalDownloadsAdmin" asp-action="Index" asp-route-storeId="@Model.StoreId">Products</a>
+        <a class="nav-link @(licensesActive ? "active" : null)" aria-current="@(licensesActive ? "page" : null)" asp-controller="DigitalDownloadsAdmin" asp-action="Index" asp-route-storeId="@Model.StoreId" asp-route-section="licenses">License keys</a>
     </nav>
 
     <partial name="_StatusMessage" />
 
+    @if (licensesActive && TempData["IssuedLicenseKey"] is string issuedLicenseKey)
+    {
+        <div class="alert alert-success mp-issued-key" role="status">
+            <div><strong>License issued. Copy this key now:</strong><br /><code class="user-select-all">@issuedLicenseKey</code></div>
+            <button class="btn btn-sm btn-secondary" type="button" data-copy-license data-license-key="@issuedLicenseKey">Copy key</button>
+        </div>
+    }
+
+    @if (!licensesActive)
+    {
     <div class="mp-stat-grid" aria-label="Store summary">
         <div class="mp-stat-card"><span class="mp-stat-icon"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#nav-products"></use></svg></span><div class="mp-stat-copy"><span>All products</span><strong>@Model.Products.Count</strong></div></div>
         <div class="mp-stat-card"><span class="mp-stat-icon"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#actions-show"></use></svg></span><div class="mp-stat-copy"><span>Published</span><strong>@publishedProducts</strong></div></div>
@@ -145,6 +168,84 @@
         </div>
     </section>
 
+    }
+    else
+    {
+        <div class="mp-stat-grid" aria-label="License summary">
+            <div class="mp-stat-card"><span class="mp-stat-icon"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#nav-products"></use></svg></span><div class="mp-stat-copy"><span>License products</span><strong>@Model.LicenseProducts.Count</strong></div></div>
+            <div class="mp-stat-card"><span class="mp-stat-icon"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#checkout-complete"></use></svg></span><div class="mp-stat-copy"><span>Issued licenses</span><strong>@Model.Licenses.Count</strong></div></div>
+            <div class="mp-stat-card"><span class="mp-stat-icon"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#checkmark"></use></svg></span><div class="mp-stat-copy"><span>Active licenses</span><strong>@activeLicenses</strong></div></div>
+            <div class="mp-stat-card"><span class="mp-stat-icon"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#key"></use></svg></span><div class="mp-stat-copy"><span>Activations</span><strong>@licenseActivations</strong></div></div>
+        </div>
+
+        <section class="mp-panel" aria-labelledby="license-products-heading">
+            <div class="mp-panel-head"><div><h3 id="license-products-heading">License products</h3><p>Configure serial formats, activation limits, validity, pricing, and storefront visibility.</p></div></div>
+            <div class="table-responsive">
+                <table class="table mp-admin-table align-middle">
+                    <thead><tr><th>Product</th><th>Key format</th><th>Activation policy</th><th>Price</th><th>Status</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+                    <tbody>
+                        @if (!Model.LicenseProducts.Any())
+                        {
+                            <tr><td colspan="6" class="mp-table-empty"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#nav-products"></use></svg><strong>Create your first license product</strong><span>Define a serial-number pattern and activation policy, then publish it in your storefront.</span><a class="btn btn-primary" asp-controller="LicenseManagerAdmin" asp-action="Product" asp-route-storeId="@Model.StoreId">Add license product</a></td></tr>
+                        }
+                        @foreach (var product in Model.LicenseProducts)
+                        {
+                            <tr>
+                                <td><span class="mp-license-product"><strong>@product.Name</strong><span>/@product.Slug</span></span></td>
+                                <td><code class="mp-license-key">@product.KeyPattern</code></td>
+                                <td><span class="small">@product.MaxActivations activation@(product.MaxActivations == 1 ? "" : "s")</span><div class="small text-muted">@(product.DurationDays is null ? "Lifetime" : $"{product.DurationDays} days")</div></td>
+                                <td class="text-nowrap"><strong>@DisplayFormatter.Currency(product.Price, Model.Settings.Currency)</strong>@if (product.CompareAtPrice is { } compare) { <div class="small text-muted text-decoration-line-through">@DisplayFormatter.Currency(compare, Model.Settings.Currency)</div> }</td>
+                                <td><span class="mp-badge @(product.Active ? "is-live" : "is-draft")">@(product.Active ? "Published" : "Draft")</span></td>
+                                <td class="text-end"><a class="btn btn-sm btn-secondary" asp-controller="LicenseManagerAdmin" asp-action="Product" asp-route-storeId="@Model.StoreId" asp-route-productId="@product.Id">Edit</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="mp-panel" aria-labelledby="issue-license-heading">
+            <div class="mp-panel-head"><div><h3 id="issue-license-heading">Issue a license manually</h3><p>Grant a customer access without creating a checkout. The generated key is shown once.</p></div></div>
+            <form method="post" asp-controller="LicenseManagerAdmin" asp-action="Issue" asp-route-storeId="@Model.StoreId" class="p-3 mp-issue-grid">
+                <label><span class="form-label">License product</span><select name="productId" class="form-select" required disabled="@(!Model.LicenseProducts.Any())">@foreach (var product in Model.LicenseProducts) { <option value="@product.Id">@product.Name</option> }</select></label>
+                <label><span class="form-label">Customer email</span><input name="email" type="email" class="form-control" required placeholder="customer@example.com" disabled="@(!Model.LicenseProducts.Any())" /></label>
+                <button class="btn btn-primary" type="submit" disabled="@(!Model.LicenseProducts.Any())">Issue license</button>
+            </form>
+        </section>
+
+        <section class="mp-panel" aria-labelledby="licenses-heading">
+            <div class="mp-panel-head"><div><h3 id="licenses-heading">Issued licenses</h3><p>The latest 200 keys, customers, activation usage, and access status.</p></div></div>
+            <div class="table-responsive">
+                <table class="table mp-admin-table align-middle">
+                    <thead><tr><th>Issued</th><th>Customer</th><th>Product</th><th>Status</th><th>Activations</th><th>Change status</th></tr></thead>
+                    <tbody>
+                        @if (!Model.Licenses.Any())
+                        {
+                            <tr><td colspan="6" class="mp-table-empty"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#nav-invoices"></use></svg><strong>No licenses issued yet</strong><span>Paid license purchases and manually issued keys will appear here.</span></td></tr>
+                        }
+                        @foreach (var license in Model.Licenses)
+                        {
+                            var licenseProduct = Model.LicenseProducts.FirstOrDefault(product => product.Id == license.ProductId);
+                            var statusClass = license.Status switch { ManagedLicenseStatus.Active => "is-live", ManagedLicenseStatus.Expired => "is-expired", ManagedLicenseStatus.Suspended => "is-warning", _ => "is-revoked" };
+                            <tr>
+                                <td class="small text-nowrap">@license.IssuedAt.ToBrowserDate()</td>
+                                <td><span class="small mp-order-customer" title="@license.CustomerEmail">@license.CustomerEmail</span><div class="small text-muted"><code>@license.Id[..Math.Min(10, license.Id.Length)]</code></div></td>
+                                <td><strong class="small">@(licenseProduct?.Name ?? "Deleted product")</strong></td>
+                                <td><span class="mp-badge @statusClass">@license.Status</span></td>
+                                <td><span class="small">@license.Activations.Count / @license.MaxActivations</span></td>
+                                <td>
+                                    <form method="post" asp-controller="LicenseManagerAdmin" asp-action="Status" asp-route-storeId="@Model.StoreId" asp-route-licenseId="@license.Id" data-license-status-form>
+                                        <label><span class="visually-hidden">Change status for @license.CustomerEmail</span><select name="status" class="form-select form-select-sm" asp-items="Html.GetEnumSelectList<ManagedLicenseStatus>()" data-current-status="@license.Status"><option value="">Change…</option></select></label>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+
     <div class="mp-attribution"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#info"></use></svg><div><strong>Created by MakePay.io.</strong> Accept 90+ currencies in a decentralized way with BTCPay Server. <a href="https://makepay.io" target="_blank" rel="noopener">Explore MakePay</a>.</div></div>
 </div>
 
@@ -174,5 +275,18 @@
         if (!window.confirm('Revoke this customer’s protected access? This takes effect immediately.')) event.preventDefault();
         else form.querySelector('button').disabled = true;
     }));
+    document.querySelectorAll('[data-license-status-form] select').forEach(select => select.addEventListener('change', () => {
+        if (!select.value || !select.form || select.dataset.submitting === 'true') return;
+        select.dataset.submitting = 'true';
+        select.form.requestSubmit();
+    }));
+    document.querySelector('[data-copy-license]')?.addEventListener('click', async event => {
+        const button = event.currentTarget;
+        try {
+            await navigator.clipboard.writeText(button.dataset.licenseKey || '');
+            button.textContent = 'Copied';
+            button.disabled = true;
+        } catch { button.textContent = 'Select and copy the key'; }
+    });
 })();
 </script>

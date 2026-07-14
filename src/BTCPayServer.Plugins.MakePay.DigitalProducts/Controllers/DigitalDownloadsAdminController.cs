@@ -29,16 +29,22 @@ public sealed class DigitalDownloadsAdminController(
     DigitalProductsAppService digitalApps) : Controller
 {
     [HttpGet("")]
-    public async Task<IActionResult> Index(string storeId)
+    public async Task<IActionResult> Index(string storeId, string? section = null)
     {
         if (await stores.FindStore(storeId) is null) return NotFound();
-        ViewData.SetActivePage("DigitalDownloads", "Digital Products", "Digital Products");
+        var activeSection = string.Equals(section, "licenses", StringComparison.OrdinalIgnoreCase) ? "licenses" : "products";
+        ViewData.SetActivePage("DigitalDownloads", "Digital Products", activeSection == "licenses" ? "License keys" : "Products");
         return View("~/Views/DigitalDownloads/Index.cshtml", new DigitalDownloadsDashboardViewModel
         {
             StoreId = storeId,
             Settings = await repository.GetSettings(storeId),
             Products = await repository.GetProducts(storeId),
-            Orders = (await repository.GetOrders(storeId)).Take(100).ToList()
+            Orders = (await repository.GetOrders(storeId)).Take(100).ToList(),
+            LicenseSettings = await licenses.GetSettings(storeId),
+            LicenseProducts = await licenses.GetProducts(storeId),
+            Licenses = (await licenses.GetLicenses(storeId)).Take(200).ToList(),
+            LicenseOrders = (await licenses.GetOrders(storeId)).Take(100).ToList(),
+            ActiveSection = activeSection
         });
     }
 
@@ -220,7 +226,7 @@ public sealed class DigitalDownloadsAdminController(
             ModelState.AddModelError(nameof(faviconUpload), faviconError);
         foreach (var slide in posted.HeroSlides)
         {
-            var upload = Request.Form.Files.FirstOrDefault(file => file.Name.Equals($"heroSlideUpload_{slide.Id}", StringComparison.Ordinal));
+            var upload = NonEmptyUpload(Request.Form.Files, $"heroSlideUpload_{slide.Id}");
             if (upload is not null && ProductFileService.ValidateStorefrontAsset(upload) is { } slideError)
                 ModelState.AddModelError($"heroSlideUpload_{slide.Id}", slideError);
         }
@@ -245,7 +251,7 @@ public sealed class DigitalDownloadsAdminController(
 
         foreach (var slide in posted.HeroSlides)
         {
-            var upload = Request.Form.Files.FirstOrDefault(file => file.Name.Equals($"heroSlideUpload_{slide.Id}", StringComparison.Ordinal));
+            var upload = NonEmptyUpload(Request.Form.Files, $"heroSlideUpload_{slide.Id}");
             if (upload is null) continue;
             try
             {
@@ -295,6 +301,12 @@ public sealed class DigitalDownloadsAdminController(
         TempData.SetStatusMessageModel(new StatusMessageModel { Severity = StatusMessageModel.StatusSeverity.Success, Message = "Digital product settings saved." });
         return RedirectToAction(nameof(Settings), new { storeId });
     }
+
+    internal static IFormFile? NonEmptyUpload(IFormFileCollection files, string name) =>
+        files.FirstOrDefault(file =>
+            file.Name.Equals(name, StringComparison.Ordinal) &&
+            file.Length > 0 &&
+            !string.IsNullOrWhiteSpace(file.FileName));
 
     private List<T>? DeserializeEditorState<T>(string? json, string key, int maximum)
     {

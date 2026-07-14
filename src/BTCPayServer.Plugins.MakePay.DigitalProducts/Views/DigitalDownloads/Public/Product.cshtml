@@ -19,6 +19,7 @@
     var itemAnalytics = DigitalAnalyticsBuilder.Product(product, Model.Settings.Currency);
     var itemAnalyticsJson = JsonSerializer.Serialize(itemAnalytics);
     var relatedListAnalytics = DigitalAnalyticsBuilder.Catalog(Model.RelatedProducts, Model.Settings.Currency, "related-products", "You may also like");
+    var cartRuntimeUrl = PublicUrls.ForRequest(Context, Model.StoreId, Url.Action("Asset", "DigitalDownloadsAssets", new { storeId = Model.StoreId, fileName = "makepay-cart.js", v = DigitalProductsPlugin.PluginVersion })!);
     string PreviewUrl(DigitalProductPreviewAsset asset) => PublicUrls.ForRequest(Context, Model.StoreId, Url.Action("ProductPreview", "DigitalDownloadsPublic", new { storeId = Model.StoreId, productId = product.Id, assetId = asset.Id })!);
 }
 <!doctype html>
@@ -50,7 +51,7 @@
     <header class="dp-detail-header"><div class="dp-detail-width">
         <a class="dp-detail-brand" asp-action="Storefront" asp-route-storeId="@Model.StoreId" style="--dp-logo-width:@(Model.Settings.LogoWidth)px;--dp-logo-height:@(Model.Settings.LogoHeight)px">@if(!string.IsNullOrWhiteSpace(Model.Settings.LogoUrl)){<img src="@Model.Settings.LogoUrl" alt="@Model.Settings.StorefrontTitle">}else{@Model.Settings.StorefrontTitle}</a>
         <nav class="dp-detail-nav" aria-label="Store navigation"><a asp-action="Storefront" asp-route-storeId="@Model.StoreId">Shop</a>@foreach(var category in Model.Categories.Take(5)){<a asp-action="Storefront" asp-route-storeId="@Model.StoreId" asp-route-category="@category.Slug">@category.Name</a>}</nav>
-        <nav class="dp-detail-account" aria-label="Customer navigation"><a asp-action="Account" asp-route-storeId="@Model.StoreId">@(Model.CustomerEmail is null ? "Sign in" : "Purchases")</a><a class="dp-primary dp-detail-cart" asp-action="CartPage" asp-route-storeId="@Model.StoreId">Cart · @Model.CartCount</a></nav>
+        <nav class="dp-detail-account" aria-label="Customer navigation"><a asp-action="Account" asp-route-storeId="@Model.StoreId">@(Model.CustomerEmail is null ? "Sign in" : "Purchases")</a><a class="dp-primary dp-detail-cart" asp-action="CartPage" asp-route-storeId="@Model.StoreId" data-makepay-cart-trigger aria-expanded="false"><span>Cart</span><span aria-hidden="true"> · </span><span data-makepay-cart-count>@Model.CartCount</span></a></nav>
     </div></header>
     <main class="dp-detail-main"><div class="dp-detail-width">
         <nav class="dp-detail-breadcrumbs" aria-label="Breadcrumb"><a asp-action="Storefront" asp-route-storeId="@Model.StoreId">Shop</a><span>/</span>@if(productCategories.Count>0){<a asp-action="Storefront" asp-route-storeId="@Model.StoreId" asp-route-category="@productCategories[0].Slug">@productCategories[0].Name</a><span>/</span>}<span>@product.Name</span></nav>
@@ -63,7 +64,7 @@
                 @if(digitalProduct is not null && (!string.IsNullOrWhiteSpace(digitalProduct.Creator) || !string.IsNullOrWhiteSpace(digitalProduct.Edition))){<p class="dp-detail-byline">@if(!string.IsNullOrWhiteSpace(digitalProduct.Creator)){<span>By @digitalProduct.Creator</span>}@if(!string.IsNullOrWhiteSpace(digitalProduct.Creator) && !string.IsNullOrWhiteSpace(digitalProduct.Edition)){<span> · </span>}@if(!string.IsNullOrWhiteSpace(digitalProduct.Edition)){<span>@digitalProduct.Edition</span>}</p>}
                 <p class="dp-detail-description">@product.Description</p>
                 <div class="dp-detail-meta"><div><span>Delivery</span><strong>@(digitalProduct is null ? "License key after payment" : DigitalStorefrontBuilder.DeliveryLabel(digitalProduct))</strong></div><div><span>Details</span><strong>@product.Meta</strong></div>@if(digitalProduct is not null && !string.IsNullOrWhiteSpace(digitalProduct.MediaDetails)){<div><span>Format</span><strong>@digitalProduct.MediaDetails</strong></div>}@if(previewAssets.Count>0){<div><span>Preview</span><strong>@previewAssets.Count public sample@(previewAssets.Count==1?"":"s")</strong></div>}</div>
-                <div class="dp-detail-purchase"><div>@if(product.CompareAtPrice is not null){<span class="dp-detail-old-price">@product.CompareAtPrice.Value.ToString("0.00") @Model.Settings.Currency</span>}<div class="dp-detail-price">@product.Price.ToString("0.00") @Model.Settings.Currency</div></div><form class="dp-detail-form" method="post" asp-action="AddToCart" asp-route-storeId="@Model.StoreId" data-loading-title="Adding to cart…" data-makepay-analytics-form="add_to_cart" data-makepay-analytics-payload="@itemAnalyticsJson"><input type="hidden" name="kind" value="@product.Kind"><input type="hidden" name="productId" value="@product.Id"><input type="hidden" name="returnUrl" value="@returnUrl">@if(product.Kind==DigitalProductKind.License){<div class="dp-detail-quantity"><label for="quantity">Quantity</label><input id="quantity" type="number" name="quantity" value="1" min="1" max="10" inputmode="numeric"></div>}else{<input type="hidden" name="quantity" value="1">}<button class="dp-primary" type="submit">Add to cart</button></form></div>
+                <div class="dp-detail-purchase"><div>@if(product.CompareAtPrice is not null){<span class="dp-detail-old-price">@product.CompareAtPrice.Value.ToString("0.00") @Model.Settings.Currency</span>}<div class="dp-detail-price">@product.Price.ToString("0.00") @Model.Settings.Currency</div></div><form class="dp-detail-form" method="post" asp-action="AddToCart" asp-route-storeId="@Model.StoreId" data-makepay-cart-form="true" data-loading-title="Adding to cart…" data-makepay-analytics-form="add_to_cart" data-makepay-analytics-payload="@itemAnalyticsJson"><input type="hidden" name="kind" value="@product.Kind"><input type="hidden" name="productId" value="@product.Id"><input type="hidden" name="returnUrl" value="@returnUrl">@if(product.Kind==DigitalProductKind.License){<div class="dp-detail-quantity"><label for="quantity">Quantity</label><input id="quantity" type="number" name="quantity" value="1" min="1" max="10" inputmode="numeric"></div>}else{<input type="hidden" name="quantity" value="1">}<button class="dp-primary" type="submit">Add to cart</button></form></div>
             </div>
         </section>
         @if(previewAssets.Count>0 && digitalProduct is not null)
@@ -105,7 +106,8 @@
 </div>
 <script type="application/json" data-makepay-analytics-load="view_item">@Html.Raw(JsonSerializer.Serialize(itemAnalytics))</script>
 @if(Model.RelatedProducts.Count>0){<script type="application/json" data-makepay-analytics-load="view_item_list">@Html.Raw(JsonSerializer.Serialize(relatedListAnalytics))</script>}
-<partial name="~/Views/DigitalDownloads/Public/_AnalyticsConsent.cshtml" model="analytics" />
+    <partial name="~/Views/DigitalDownloads/Public/_AnalyticsConsent.cshtml" model="analytics" />
+    <script src="@cartRuntimeUrl" defer></script>
 @if(previewAssets.Count>0){<script src="@mediaScriptUrl" defer></script>}
 </body>
 </html>
