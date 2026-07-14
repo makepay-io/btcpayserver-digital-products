@@ -15,6 +15,8 @@ public abstract class DigitalDownloadsAssetsControllerBase : Controller
         {
             ["makepay-analytics.js"] =
                 ("BTCPayServer.Plugins.MakePay.DigitalProducts.Assets.makepay-analytics.js", "text/javascript; charset=utf-8"),
+            ["makepay-cart.js"] =
+                ("BTCPayServer.Plugins.MakePay.DigitalProducts.Assets.makepay-cart.js", "text/javascript; charset=utf-8"),
             ["makepay-media.js"] =
                 ("BTCPayServer.Plugins.MakePay.DigitalProducts.Assets.pdfjs.makepay-media.js", "text/javascript; charset=utf-8"),
             ["pdf.min.mjs"] =
