@@ -38,6 +38,49 @@
 
 final result: passed
 
+# Design QA — Digital Products 1.6.1
+
+## Grounding
+
+- Settings-dashboard source: `/var/folders/70/d8rtf1ds5f14stgc4yv_4c600000gn/T/TemporaryItems/NSIRD_screencaptureui_NgtxxE/Screenshot 2026-07-14 at 1.56.42 PM.png`.
+- Matched implementation capture: `.design-qa/settings-after-1564x891.jpg`.
+- Combined reference comparison: `.design-qa/settings-reference-comparison.png`.
+- Desktop comparison viewport: 1564 × 891 CSS pixels. Mobile resilience viewport: 390 × 844 CSS pixels.
+- State: authenticated BTCPay dark dashboard with the Storefront settings panel selected.
+
+## Visual comparison and fidelity
+
+- The reference and implementation were stacked in one same-viewport comparison input. The new settings screen carries over the dashboard's compact title/action hierarchy, native green emphasis, dark tile surfaces, muted descriptions, underline navigation, four-card status row, and bordered content-panel rhythm.
+- Settings preserve BTCPay's actual sidebar and dashboard shell rather than reproducing the reference page as a disconnected custom application.
+- The focused Storefront panel uses two balanced groups for identity and catalog appearance. Remaining settings move into Customer access, Analytics, Delivery & storage, and Custom domain tabs, reducing the previous long wall of equal-priority cards.
+- Typography, control heights, border radii, tokenized colors, icon scale, and action hierarchy remain consistent with neighboring BTCPay administration pages.
+- Desktop actions remain aligned and the save bar stays available while scrolling. At 390 pixels, actions stack, field groups collapse to one column, tabs scroll horizontally, the save bar becomes static, and body/document width remains exactly 390 pixels with no horizontal overflow.
+
+## Interaction and accessibility verification
+
+- Storefront, Customer access, Analytics, Delivery & storage, and Custom domain tabs change in place without navigation or scroll reset.
+- Tab selection updates `aria-selected`, panels use `role="tabpanel"`, and Arrow Left/Right, Home, and End keyboard navigation is supported.
+- The selected tab persists through the URL hash and session storage.
+- A failed submission automatically reveals the panel containing the first invalid field so validation feedback cannot remain hidden.
+- The fullscreen live editor opens from both settings entry points and closes cleanly without navigating away.
+- Header and bottom save actions submit the same form and become disabled after submission to prevent double clicks.
+- No duplicate settings inputs were introduced; the existing 56 unique model bindings, hero/category JSON payloads, blank-preserving secrets, and enforced MakePay attribution contract remain intact.
+
+## Findings
+
+- No actionable P0, P1, or P2 fidelity, responsive, accessibility, or interaction findings remain.
+- Historical Blazor reconnect messages observed during candidate container restarts were infrastructure-side and not emitted by the plugin settings code.
+
+## Automated verification
+
+- Release build and Razor compilation: passed.
+- Automated tests: 144 passed, 0 failed.
+- Settings-dashboard structural tests cover accessible panels, validation-aware navigation, preserved bindings, secrets, and unique editor modes.
+- `git diff --check`: passed.
+- The only build warning remains the upstream BTCPay Server MailKit 4.8.0 NU1902 advisory; it is not introduced by this release.
+
+final result: passed
+
 # Design QA — Digital Products 1.6.0
 
 ## Grounding

@@ -11,7 +11,7 @@ namespace BTCPayServer.Plugins.MakePay.DigitalProducts;
 
 public sealed class DigitalProductsPlugin : BaseBTCPayServerPlugin
 {
-    public const string PluginVersion = "1.6.0";
+    public const string PluginVersion = "1.6.1";
     public const string SettingsKey = "MakePay.DigitalDownloads.Settings";
     public const string CatalogKey = "MakePay.DigitalDownloads.Catalog";
     public const string OrdersKey = "MakePay.DigitalDownloads.Orders";
