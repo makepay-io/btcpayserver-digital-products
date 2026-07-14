@@ -17,6 +17,7 @@ public sealed class DigitalDeliveryService(
     DigitalDownloadsRepository repository,
     DownloadTokenService tokens,
     EmailSenderFactory emailSenderFactory,
+    DigitalPublicUrlService publicUrls,
     LinkGenerator links) : EventHostedServiceBase(events, logger)
 {
     public const string TagPrefix = "MPDD#";
@@ -54,7 +55,7 @@ public sealed class DigitalDeliveryService(
         if (!settings.EmailDeliveryEnabled || string.IsNullOrWhiteSpace(order.BuyerEmail)) return;
         var action = product.DeliveryMode == DigitalDeliveryMode.Stream ? "Stream" : "Download";
         var path = links.GetPathByAction(action, "DigitalDownloadsPublic", new { storeId = order.StoreId, orderId = order.Id, token })!;
-        var downloadUrl = order.PublicBaseUrl.TrimEnd('/') + path;
+        var downloadUrl = await publicUrls.Absolute(order.StoreId, order.PublicBaseUrl, path);
         string Encode(string value) => HtmlEncoder.Default.Encode(value);
         var body = settings.EmailHtml
             .Replace("{StoreName}", Encode(settings.StorefrontTitle), StringComparison.Ordinal)

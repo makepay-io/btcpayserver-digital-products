@@ -6,10 +6,10 @@
     var expired = Model.Order.ExpiresAt is { } expiresAt && expiresAt <= DateTimeOffset.UtcNow;
     var typeLabel = DigitalStorefrontBuilder.ProductTypeLabel(Model.Product.ProductType);
     var analytics = new DigitalAnalyticsViewModel { StoreId = storeId, Settings = Model.Settings, PageType = "order" };
-    var mediaScriptUrl = Url.Action("Asset", "DigitalDownloadsAssets", new { storeId, fileName = "makepay-media.js" });
-    var pdfLibraryUrl = Url.Action("Asset", "DigitalDownloadsAssets", new { storeId, fileName = "pdf.min.mjs" });
-    var pdfWorkerUrl = Url.Action("Asset", "DigitalDownloadsAssets", new { storeId, fileName = "pdf.worker.min.mjs" });
-    var productImage = Model.Product.ImageUrl ?? Url.Action("ProductAsset", "DigitalDownloadsPublic", new
+    var mediaScriptUrl = PublicUrls.ForRequest(Context, storeId, Url.Action("Asset", "DigitalDownloadsAssets", new { storeId, fileName = "makepay-media.js" })!);
+    var pdfLibraryUrl = PublicUrls.ForRequest(Context, storeId, Url.Action("Asset", "DigitalDownloadsAssets", new { storeId, fileName = "pdf.min.mjs" })!);
+    var pdfWorkerUrl = PublicUrls.ForRequest(Context, storeId, Url.Action("Asset", "DigitalDownloadsAssets", new { storeId, fileName = "pdf.worker.min.mjs" })!);
+    var productImage = Model.Product.ImageUrl ?? PublicUrls.ForRequest(Context, storeId, Url.Action("ProductAsset", "DigitalDownloadsPublic", new
     {
         storeId,
         kind = Model.Product.ProductType switch
@@ -20,7 +20,7 @@
             DigitalProductType.PhotosArt => "photo",
             _ => "download"
         }
-    });
+    })!);
     var downloadLabel = Model.Product.ProductType switch
     {
         DigitalProductType.PdfEbook => "Download PDF",

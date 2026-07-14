@@ -2,7 +2,7 @@
 
 A self-hosted BTCPay Server plugin for selling digital media and generated software licenses from one branded storefront. Customers can combine products in one cart, sign in with a one-time email code, pay through BTCPay's JavaScript checkout modal, and return to a private purchase library.
 
-Version 1.4.2 adds an in-product custom-domain guide with the live canonical storefront URL, safe DNS/TLS instructions for BTCPay Docker operators, and an explicit explanation of the current clean-path limitation.
+Version 1.5.0 registers a native BTCPay App identity so server administrators can use BTCPay's Policies domain mapping with clean <code>/downloads</code> routes across the complete public storefront and protected-delivery surface.
 
 Version 1.4.1 adds a per-store favicon URL and managed local favicon upload. The configured icon is emitted consistently across the shop, product, cart, sign-in, payment, confirmation, purchase-library, protected-delivery, and legacy license pages; an empty setting emits no custom favicon tag.
 
@@ -29,10 +29,10 @@ Existing per-store settings, products, orders, issued licenses, and API credenti
 
 ## Custom domains
 
-The storefront can be reached through a branded hostname after the domain and BTCPay reverse proxy are configured. The route available today remains store-scoped, for example:
+The storefront can use a branded hostname after the domain and BTCPay reverse proxy are configured. Native clean-domain routing then provides:
 
 ```text
-https://shop.example.com/stores/<storeId>/downloads
+https://shop.example.com/downloads
 ```
 
 For an official Docker deployment:
@@ -51,7 +51,16 @@ A CNAME alone is insufficient: the receiving reverse proxy must accept the hostn
 
 `BTCPAY_ADDITIONAL_HOSTS` aliases the entire BTCPay Server, not only this store. Other BTCPay pages and store-scoped public routes remain reachable through that hostname, so it must not be treated as domain-to-store isolation.
 
-DNS and `BTCPAY_ADDITIONAL_HOSTS` do not remove `/stores/<storeId>` from the plugin route. Digital Products is not currently registered as a BTCPay App, so Server Settings → Policies cannot map it to a clean root route. A clean `https://shop.example.com/downloads` URL requires a host-to-store short-route implementation or an external reverse proxy that correctly rewrites every related storefront, asset, checkout, callback, and protected-delivery route. If the apex domain already hosts another website, its proxy or CDN must own that path routing; a dedicated subdomain is recommended.
+After DNS, HTTPS, and `BTCPAY_ADDITIONAL_HOSTS` are working:
+
+1. Open **Store → Integrations → Digital Products** and explicitly create a **Digital Products app** identity if the store does not already have one. The plugin never creates or changes AppData during a public request.
+2. As a BTCPay **server administrator**, open **Server settings → Policies → Domain mapping**.
+3. Add the exact normalized ASCII hostname (punycode for an internationalized domain; no scheme, port, whitespace, or trailing dot) and select the Digital Products app for this store.
+4. Verify `https://your-host/downloads`, its cart and sign-in flows, and a protected delivery link. If BTCPay uses a root path such as `/btcpay`, verify `https://your-host/btcpay/downloads` instead.
+
+BTCPay's native domain constraint supplies the mapped AppData to each clean-domain request. The plugin derives the store exclusively from `AppData.StoreDataId`; a query string, form field, or route value named `storeId` cannot select another store. The mapped surface includes storefront, product details, previews, runtime assets, cart, passwordless sign-in, checkout/payment state, confirmation, library, streams, and protected file delivery. Generated invoice, redirect, and email links use the mapped hostname and the configured BTCPay root path. Legacy `/stores/<storeId>/downloads` routes remain available, while safe GET/HEAD requests are canonicalized to the mapped URL. Tor visits to a legacy route remain on the current `.onion` origin, including invoice, email delivery, and passwordless-library return links.
+
+Hostname assignment remains server-admin-only because `/downloads` is global on a mapped hostname. Keep one active Digital Products app identity per store. BTCPay does not reject duplicate domain rows: for the same exact hostname (case-insensitive), the first row in the global Policies list wins, even when a later row points to this plugin. Remove or reorder duplicates, and store the hostname in the same normalized ASCII/punycode form the browser sends because BTCPay's native constraint does not trim or normalize policy values. If the apex domain already hosts another website, its proxy or CDN must route `/downloads` and every nested path to BTCPay; a dedicated `shop.` subdomain is recommended. DNS, certificates, reverse-proxy rules, and `BTCPAY_ADDITIONAL_HOSTS` cannot be configured from inside the plugin.
 
 See the official BTCPay documentation for [Docker additional hosts](https://docs.btcpayserver.org/Docker/#environment-variables), [mapping domains to BTCPay Apps](https://docs.btcpayserver.org/FAQ/Apps/#how-to-map-a-domain-name-to-an-app), and [external reverse proxy and TLS configuration](https://docs.btcpayserver.org/FAQ/Deployment/#can-i-use-an-existing-nginx-server-as-a-reverse-proxy-with-ssl-termination).
 

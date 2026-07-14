@@ -37,7 +37,7 @@
     const checkoutId = @Html.Raw(JsonSerializer.Serialize(Model.Checkout.Id));
     const analyticsDedupeId = @Html.Raw(JsonSerializer.Serialize(analyticsDedupeId));
     const paymentAnalytics = @Html.Raw(paymentAnalyticsJson);
-    const statusUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("CheckoutStatus", new { storeId = Model.StoreId, checkoutId = Model.Checkout.Id, accessToken = Model.AccessToken })));
+    const statusUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(PublicUrls.ForRequest(Context, Model.StoreId, Url.Action("CheckoutStatus", "DigitalDownloadsPublic", new { storeId = Model.StoreId, checkoutId = Model.Checkout.Id, accessToken = Model.AccessToken })!)));
     const openButton = document.getElementById('open-checkout');
     const title = document.getElementById('payment-title');
     const state = document.getElementById('payment-state');

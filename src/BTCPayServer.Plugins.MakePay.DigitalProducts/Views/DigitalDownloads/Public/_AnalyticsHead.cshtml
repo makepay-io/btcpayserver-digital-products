@@ -12,12 +12,12 @@
         Csp.Add("connect-src", "https://*.analytics.google.com");
         Csp.Add("connect-src", "https://*.googletagmanager.com");
     }
-    var runtimeUrl = Url.Action("Asset", "DigitalDownloadsAssets", new
+    var runtimeUrl = PublicUrls.ForRequest(Context, Model.StoreId, Url.Action("Asset", "DigitalDownloadsAssets", new
     {
         storeId = Model.StoreId,
         fileName = "makepay-analytics.js",
         v = DigitalProductsPlugin.PluginVersion
-    });
+    })!);
 }
 <meta name="referrer" content="no-referrer">
 <script src="@runtimeUrl"

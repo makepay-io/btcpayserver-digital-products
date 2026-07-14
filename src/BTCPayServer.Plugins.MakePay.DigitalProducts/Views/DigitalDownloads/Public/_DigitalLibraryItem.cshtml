@@ -3,7 +3,7 @@
     var storeId = ViewData["StoreId"] as string ?? "";
     var expired = Model.Order.ExpiresAt is { } expiresAt && expiresAt <= DateTimeOffset.UtcNow;
     var typeLabel = DigitalStorefrontBuilder.ProductTypeLabel(Model.Product.ProductType);
-    var productImage = Model.Product.ImageUrl ?? Url.Action("ProductAsset", "DigitalDownloadsPublic", new
+    var productImage = Model.Product.ImageUrl ?? PublicUrls.ForRequest(Context, storeId, Url.Action("ProductAsset", "DigitalDownloadsPublic", new
     {
         storeId,
         kind = Model.Product.ProductType switch
@@ -14,7 +14,7 @@
             DigitalProductType.PhotosArt => "photo",
             _ => "download"
         }
-    });
+    })!);
     var downloadLabel = Model.Product.ProductType switch
     {
         DigitalProductType.PdfEbook => "Download PDF",
@@ -23,8 +23,8 @@
         DigitalProductType.PhotosArt => "Download asset pack",
         _ => "Download file"
     };
-    var pdfLibraryUrl = Url.Action("Asset", "DigitalDownloadsAssets", new { storeId, fileName = "pdf.min.mjs" });
-    var pdfWorkerUrl = Url.Action("Asset", "DigitalDownloadsAssets", new { storeId, fileName = "pdf.worker.min.mjs" });
+    var pdfLibraryUrl = PublicUrls.ForRequest(Context, storeId, Url.Action("Asset", "DigitalDownloadsAssets", new { storeId, fileName = "pdf.min.mjs" })!);
+    var pdfWorkerUrl = PublicUrls.ForRequest(Context, storeId, Url.Action("Asset", "DigitalDownloadsAssets", new { storeId, fileName = "pdf.worker.min.mjs" })!);
 }
 <article class="dp-library-item">
     <div class="dp-library-product-head"><div><div class="dp-library-product-type">@typeLabel</div><h3>@Model.Product.Name</h3></div>@if(Model.Product.DeliveryMode != DigitalDeliveryMode.Download && !expired){<span class="dp-status paid">Online access</span>}</div>

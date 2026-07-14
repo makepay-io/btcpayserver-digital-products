@@ -24,7 +24,9 @@ public sealed class DigitalDownloadsAdminController(
     LicenseRepository licenses,
     DigitalCheckoutService checkoutService,
     ProductFileService files,
-    DownloadTokenService secrets) : Controller
+    DownloadTokenService secrets,
+    DigitalPublicUrlService publicUrls,
+    DigitalProductsAppService digitalApps) : Controller
 {
     [HttpGet("")]
     public async Task<IActionResult> Index(string storeId)
@@ -163,8 +165,9 @@ public sealed class DigitalDownloadsAdminController(
     public async Task<IActionResult> Settings(string storeId)
     {
         if (await stores.FindStore(storeId) is null) return NotFound();
-        await PrepareSettingsViewData(storeId);
-        return View("~/Views/DigitalDownloads/Settings.cshtml", await repository.GetSettings(storeId));
+        var settings = await repository.GetSettings(storeId);
+        await PrepareSettingsViewData(storeId, settings: settings);
+        return View("~/Views/DigitalDownloads/Settings.cshtml", settings);
     }
 
     [HttpPost("settings")]
@@ -207,7 +210,7 @@ public sealed class DigitalDownloadsAdminController(
         if (!string.IsNullOrWhiteSpace(remoteAuthorizationValue) && (remoteAuthorizationValue.Contains('\r') || remoteAuthorizationValue.Contains('\n'))) ModelState.AddModelError("remoteAuthorizationValue", "Authorization values cannot contain line breaks.");
         if (!ModelState.IsValid)
         {
-            await PrepareSettingsViewData(storeId, catalog);
+            await PrepareSettingsViewData(storeId, catalog, posted);
             return View("~/Views/DigitalDownloads/Settings.cshtml", posted);
         }
 
@@ -223,7 +226,7 @@ public sealed class DigitalDownloadsAdminController(
         }
         if (!ModelState.IsValid)
         {
-            await PrepareSettingsViewData(storeId, catalog);
+            await PrepareSettingsViewData(storeId, catalog, posted);
             return View("~/Views/DigitalDownloads/Settings.cshtml", posted);
         }
 
@@ -257,7 +260,7 @@ public sealed class DigitalDownloadsAdminController(
 
         if (!ModelState.IsValid)
         {
-            await PrepareSettingsViewData(storeId, catalog);
+            await PrepareSettingsViewData(storeId, catalog, posted);
             return View("~/Views/DigitalDownloads/Settings.cshtml", posted);
         }
 
@@ -276,7 +279,7 @@ public sealed class DigitalDownloadsAdminController(
 
         if (!ModelState.IsValid)
         {
-            await PrepareSettingsViewData(storeId, catalog);
+            await PrepareSettingsViewData(storeId, catalog, posted);
             return View("~/Views/DigitalDownloads/Settings.cshtml", posted);
         }
 
@@ -394,11 +397,26 @@ public sealed class DigitalDownloadsAdminController(
         _ => "Product sample"
     };
 
-    private async Task PrepareSettingsViewData(string storeId, IReadOnlyList<StoreProductViewModel>? catalog = null)
+    private async Task PrepareSettingsViewData(
+        string storeId,
+        IReadOnlyList<StoreProductViewModel>? catalog = null,
+        DigitalDownloadsSettings? settings = null)
     {
+        settings ??= await repository.GetSettings(storeId);
         catalog ??= checkoutService.BuildCatalog(await repository.GetProducts(storeId), await licenses.GetProducts(storeId));
         ViewData["StoreId"] = storeId;
-        ViewData["PreviewStoreUrl"] = Url.Action(nameof(DigitalDownloadsPublicController.Storefront), "DigitalDownloadsPublic", new { storeId });
+        var legacyPath = Url.Action(nameof(DigitalDownloadsPublicController.Storefront), "DigitalDownloadsPublic", new { storeId }) ?? DigitalPublicUrlService.LegacyPrefix(storeId);
+        var canonical = await publicUrls.Absolute(storeId, Request.GetAbsoluteRoot(), legacyPath);
+        var apps = await digitalApps.GetForStore(storeId);
+        var (mappedApp, mappedDomain) = await digitalApps.MappingForStore(storeId);
+        ViewData["PreviewStoreUrl"] = canonical;
+        ViewData["CanonicalStoreUrl"] = canonical;
+        ViewData["DigitalProductsApps"] = apps;
+        ViewData["MappedDigitalProductsApp"] = mappedDomain is null ? null : mappedApp;
+        ViewData["MappedDigitalProductsDomain"] = mappedDomain;
+        ViewData["CreateDigitalProductsAppUrl"] = Url.Action("CreateApp", "UIApps",
+            new { storeId, appType = DigitalProductsAppType.AppType }) ??
+            $"{Request.PathBase}/stores/{storeId}/apps/create/{DigitalProductsAppType.AppType}";
         ViewData["CatalogOptions"] = catalog;
         ViewData.SetActivePage("DigitalDownloadsSettings", "Digital Products", "Storefront & delivery settings");
     }
