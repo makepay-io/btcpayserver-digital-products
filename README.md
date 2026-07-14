@@ -2,6 +2,8 @@
 
 A self-hosted BTCPay Server plugin for selling digital media and generated software licenses from one branded storefront. Customers can combine products in one cart, sign in with a one-time email code, pay through BTCPay's JavaScript checkout modal, and return to a private purchase library.
 
+Version 1.4.2 adds an in-product custom-domain guide with the live canonical storefront URL, safe DNS/TLS instructions for BTCPay Docker operators, and an explicit explanation of the current clean-path limitation.
+
 Version 1.4.1 adds a per-store favicon URL and managed local favicon upload. The configured icon is emitted consistently across the shop, product, cart, sign-in, payment, confirmation, purchase-library, protected-delivery, and legacy license pages; an empty setting emits no custom favicon tag.
 
 Version 1.4 adds consent-aware Google Tag Manager and direct Google Analytics 4 commerce analytics to the media storefront introduced in version 1.3. The existing file-download and license data model remains compatible:
@@ -24,6 +26,34 @@ Existing per-store settings, products, orders, issued licenses, and API credenti
 - A private customer library with protected downloads and streams, recoverable license keys, activation state, and checkout history.
 - A server-created invoice opened through BTCPay's official `/modal/btcpay.js` integration, with payment-state polling and product unlock.
 - Enforced MakePay.io attribution and backlink in the public footer.
+
+## Custom domains
+
+The storefront can be reached through a branded hostname after the domain and BTCPay reverse proxy are configured. The route available today remains store-scoped, for example:
+
+```text
+https://shop.example.com/stores/<storeId>/downloads
+```
+
+For an official Docker deployment:
+
+1. Configure an A/AAAA record to the BTCPay server, or a CNAME to its public hostname, and wait for DNS to resolve.
+2. Confirm ports 80 and 443 reach BTCPay.
+3. As the server administrator, set `BTCPAY_ADDITIONAL_HOSTS` to the **complete comma-separated list**, retaining all existing additional hostnames, then rerun setup:
+
+   ```bash
+   # Replace both placeholders. Run as root from the btcpayserver-docker directory.
+   export BTCPAY_ADDITIONAL_HOSTS="<your-new-host>,<all-existing-additional-hosts>"
+   . ./btcpay-setup.sh -i
+   ```
+
+A CNAME alone is insufficient: the receiving reverse proxy must accept the hostname and provide a valid TLS certificate. Verify DNS before adding the hostname, because an unresolved or incorrect additional hostname can prevent Let's Encrypt renewal for every configured hostname, including the primary BTCPay domain.
+
+`BTCPAY_ADDITIONAL_HOSTS` aliases the entire BTCPay Server, not only this store. Other BTCPay pages and store-scoped public routes remain reachable through that hostname, so it must not be treated as domain-to-store isolation.
+
+DNS and `BTCPAY_ADDITIONAL_HOSTS` do not remove `/stores/<storeId>` from the plugin route. Digital Products is not currently registered as a BTCPay App, so Server Settings → Policies cannot map it to a clean root route. A clean `https://shop.example.com/downloads` URL requires a host-to-store short-route implementation or an external reverse proxy that correctly rewrites every related storefront, asset, checkout, callback, and protected-delivery route. If the apex domain already hosts another website, its proxy or CDN must own that path routing; a dedicated subdomain is recommended.
+
+See the official BTCPay documentation for [Docker additional hosts](https://docs.btcpayserver.org/Docker/#environment-variables), [mapping domains to BTCPay Apps](https://docs.btcpayserver.org/FAQ/Apps/#how-to-map-a-domain-name-to-an-app), and [external reverse proxy and TLS configuration](https://docs.btcpayserver.org/FAQ/Deployment/#can-i-use-an-existing-nginx-server-as-a-reverse-proxy-with-ssl-termination).
 
 ## Analytics and privacy
 
