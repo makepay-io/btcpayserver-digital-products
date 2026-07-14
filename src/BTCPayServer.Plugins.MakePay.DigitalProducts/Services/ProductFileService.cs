@@ -15,6 +15,7 @@ public sealed class ProductFileService(HttpClient httpClient, IOptions<DataDirec
 {
     private readonly string _root = Path.Combine(directories.Value.DataDir, "MakePayDigitalDownloads");
     private const long MaxStorefrontAssetBytes = 10 * 1024 * 1024;
+    private const long MaxFaviconAssetBytes = 1024 * 1024;
     // Stay below the default 100 MB reverse-proxy request limit on BTCPay deployments.
     private const long MaxPreviewAssetBytes = 95L * 1024 * 1024;
     private static readonly IReadOnlyDictionary<string, string> StorefrontImageExtensions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -23,6 +24,11 @@ public sealed class ProductFileService(HttpClient httpClient, IOptions<DataDirec
         ["image/jpeg"] = ".jpg",
         ["image/webp"] = ".webp",
         ["image/gif"] = ".gif"
+    };
+    private static readonly IReadOnlyDictionary<string, string> FaviconExtensions = new Dictionary<string, string>(StorefrontImageExtensions, StringComparer.OrdinalIgnoreCase)
+    {
+        ["image/x-icon"] = ".ico",
+        ["image/vnd.microsoft.icon"] = ".ico"
     };
 
     public async Task<(string RelativePath, string FileName, string ContentType, long Size)> SaveLocal(
@@ -130,7 +136,27 @@ public sealed class ProductFileService(HttpClient httpClient, IOptions<DataDirec
     {
         if (ValidateStorefrontAsset(upload) is { } validationError) throw new InvalidOperationException(validationError);
         var contentType = upload.ContentType?.Split(';', 2)[0].Trim() ?? "";
-        var extension = StorefrontImageExtensions[contentType];
+        return await SaveStorefrontAsset(storeId, assetId, upload, contentType, StorefrontImageExtensions[contentType], cancellationToken);
+    }
+
+    public async Task<(string FileName, string ContentType, long Size)> SaveFaviconAsset(
+        string storeId,
+        IFormFile upload,
+        CancellationToken cancellationToken)
+    {
+        if (ValidateFaviconAsset(upload) is { } validationError) throw new InvalidOperationException(validationError);
+        var contentType = upload.ContentType?.Split(';', 2)[0].Trim() ?? "";
+        return await SaveStorefrontAsset(storeId, "favicon", upload, contentType, FaviconExtensions[contentType], cancellationToken);
+    }
+
+    private async Task<(string FileName, string ContentType, long Size)> SaveStorefrontAsset(
+        string storeId,
+        string assetId,
+        IFormFile upload,
+        string contentType,
+        string extension,
+        CancellationToken cancellationToken)
+    {
 
         var directory = Path.Combine(_root, "StorefrontAssets", SafeSegment(storeId), SafeAssetSegment(assetId));
         Directory.CreateDirectory(directory);
@@ -152,6 +178,16 @@ public sealed class ProductFileService(HttpClient httpClient, IOptions<DataDirec
         return StorefrontImageExtensions.ContainsKey(contentType) ? null : "Use a PNG, JPEG, WebP, or GIF image.";
     }
 
+    public static string? ValidateFaviconAsset(IFormFile upload)
+    {
+        if (upload.Length <= 0) return "The favicon file is empty.";
+        if (upload.Length > MaxFaviconAssetBytes) return "Favicons must be 1 MB or smaller.";
+        var contentType = upload.ContentType?.Split(';', 2)[0].Trim() ?? "";
+        return FaviconExtensions.ContainsKey(contentType)
+            ? null
+            : "Use a PNG, ICO, JPEG, WebP, or GIF favicon. SVG files are not accepted.";
+    }
+
     public RemoteFile? OpenStorefrontAsset(string storeId, string assetId, string fileName)
     {
         if (SafeAssetSegment(assetId) != assetId || Path.GetFileName(fileName) != fileName) return null;
@@ -160,7 +196,7 @@ public sealed class ProductFileService(HttpClient httpClient, IOptions<DataDirec
         var root = Path.GetFullPath(directory) + Path.DirectorySeparatorChar;
         if (!fullPath.StartsWith(root, StringComparison.Ordinal) || !File.Exists(fullPath)) return null;
         var extension = Path.GetExtension(fileName);
-        var contentType = StorefrontImageExtensions.FirstOrDefault(item => item.Value.Equals(extension, StringComparison.OrdinalIgnoreCase)).Key;
+        var contentType = FaviconExtensions.FirstOrDefault(item => item.Value.Equals(extension, StringComparison.OrdinalIgnoreCase)).Key;
         if (string.IsNullOrWhiteSpace(contentType)) return null;
         var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, true);
         return new RemoteFile(stream, contentType, stream.Length, null);

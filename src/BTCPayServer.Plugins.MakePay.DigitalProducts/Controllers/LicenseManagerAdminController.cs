@@ -3,6 +3,7 @@ using BTCPayServer.Abstractions.Constants;
 using BTCPayServer.Abstractions.Extensions;
 using BTCPayServer.Abstractions.Models;
 using BTCPayServer.Client;
+using BTCPayServer.Plugins.MakePay.DigitalProducts.Services;
 using BTCPayServer.Plugins.MakePay.LicenseManager.Models;
 using BTCPayServer.Plugins.MakePay.LicenseManager.Services;
 using BTCPayServer.Services.Stores;
@@ -42,7 +43,9 @@ public sealed class LicenseManagerAdminController(StoreRepository stores, Licens
     [HttpPost("settings")]
     public async Task<IActionResult> SaveSettings(string storeId, LicenseManagerSettings posted, string? apiSecret)
     {
+        posted.FaviconUrl = DigitalStorefrontBuilder.NormalizePublicResourceUrl(posted.FaviconUrl);
         var existing = await repository.GetSettings(storeId); posted.ProtectedApiSecret = string.IsNullOrWhiteSpace(apiSecret) ? existing.ProtectedApiSecret : security.Protect(apiSecret);
+        if (!DigitalStorefrontBuilder.IsSafePublicResourceUrl(posted.FaviconUrl)) ModelState.AddModelError(nameof(posted.FaviconUrl), "Favicon URLs must use HTTP(S) or an uploaded local image.");
         if (!LicenseSecurityService.ValidHeaderConfiguration(posted.LicenseKeyHeader, posted.SignatureHeader, posted.TimestampHeader, posted.NonceHeader, posted.ResponseSignatureHeader)) ModelState.AddModelError("", "API header names must be unique, valid custom X- headers.");
         if (!ModelState.IsValid) { ViewData["StoreId"] = storeId; return View("~/Views/LicenseManager/Settings.cshtml", posted); }
         await repository.SaveSettings(storeId, posted); TempData.SetStatusMessageModel(new() { Severity = StatusMessageModel.StatusSeverity.Success, Message = "License API settings saved." }); return RedirectToAction(nameof(Settings), new { storeId });

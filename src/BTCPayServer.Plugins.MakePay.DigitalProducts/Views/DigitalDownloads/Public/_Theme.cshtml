@@ -1,5 +1,6 @@
 @model DigitalDownloadsSettings
 @{
+    var faviconUrl = DigitalStorefrontBuilder.SafePublicResourceUrl(Model.FaviconUrl);
     var font = Model.FontStyle switch
     {
         DigitalStoreFontStyle.Rounded => "ui-rounded, 'Arial Rounded MT Bold', system-ui, sans-serif",
@@ -8,6 +9,10 @@
         DigitalStoreFontStyle.System => "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
         _ => "'Helvetica Neue', Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
     };
+}
+@if (faviconUrl is not null)
+{
+    <link rel="icon" href="@faviconUrl">
 }
 <style>
     :root{--dp-accent:@Model.AccentColor;--dp-accent-text:@Model.AccentTextColor;--dp-brand-text:@Model.BrandTextColor;--dp-page:@Model.PageBackgroundColor;--dp-surface:@Model.SurfaceColor;--dp-text:@Model.TextColor;--dp-muted:@Model.MutedColor;--dp-soft:@Model.SoftColor;--dp-brand-width:@(Model.BrandPanelWidth)%;--dp-font:@Html.Raw(font);--dp-border:#e4e7ec;--dp-danger:#b42318;--dp-success:#067647}

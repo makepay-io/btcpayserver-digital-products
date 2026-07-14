@@ -174,6 +174,7 @@ public sealed class DigitalDownloadsAdminController(
         string? heroSlidesJson,
         string? categoriesJson,
         IFormFile? logoUpload,
+        IFormFile? faviconUpload,
         string? s3SecretKey,
         string? remoteAuthorizationValue,
         CancellationToken cancellationToken)
@@ -187,6 +188,7 @@ public sealed class DigitalDownloadsAdminController(
         if (slides is not null) posted.HeroSlides = slides;
         if (categories is not null) posted.StorefrontCategories = categories;
 
+        posted.FaviconUrl = DigitalStorefrontBuilder.NormalizePublicResourceUrl(posted.FaviconUrl);
         ValidateEditorState(posted, validProductReferences);
         DigitalAnalyticsBuilder.NormalizeConfiguration(posted);
         // Retain inactive provider IDs for convenient switching, but do not let an
@@ -211,6 +213,8 @@ public sealed class DigitalDownloadsAdminController(
 
         if (logoUpload is not null && ProductFileService.ValidateStorefrontAsset(logoUpload) is { } logoError)
             ModelState.AddModelError(nameof(logoUpload), logoError);
+        if (faviconUpload is not null && ProductFileService.ValidateFaviconAsset(faviconUpload) is { } faviconError)
+            ModelState.AddModelError(nameof(faviconUpload), faviconError);
         foreach (var slide in posted.HeroSlides)
         {
             var upload = Request.Form.Files.FirstOrDefault(file => file.Name.Equals($"heroSlideUpload_{slide.Id}", StringComparison.Ordinal));
@@ -248,6 +252,25 @@ public sealed class DigitalDownloadsAdminController(
             catch (InvalidOperationException ex)
             {
                 ModelState.AddModelError($"heroSlideUpload_{slide.Id}", ex.Message);
+            }
+        }
+
+        if (!ModelState.IsValid)
+        {
+            await PrepareSettingsViewData(storeId, catalog);
+            return View("~/Views/DigitalDownloads/Settings.cshtml", posted);
+        }
+
+        if (faviconUpload is not null)
+        {
+            try
+            {
+                var saved = await files.SaveFaviconAsset(storeId, faviconUpload, cancellationToken);
+                posted.FaviconUrl = Url.Action(nameof(DigitalDownloadsPublicController.StorefrontAsset), "DigitalDownloadsPublic", new { storeId, assetId = "favicon", fileName = saved.FileName });
+            }
+            catch (InvalidOperationException ex)
+            {
+                ModelState.AddModelError(nameof(faviconUpload), ex.Message);
             }
         }
 
@@ -297,6 +320,7 @@ public sealed class DigitalDownloadsAdminController(
     private void ValidateEditorState(DigitalDownloadsSettings posted, IReadOnlySet<string> validProductReferences)
     {
         if (!DigitalStorefrontBuilder.IsSafePublicResourceUrl(posted.LogoUrl)) ModelState.AddModelError(nameof(posted.LogoUrl), "Logo URLs must use HTTP(S) or an uploaded local image.");
+        if (!DigitalStorefrontBuilder.IsSafePublicResourceUrl(posted.FaviconUrl)) ModelState.AddModelError(nameof(posted.FaviconUrl), "Favicon URLs must use HTTP(S) or an uploaded local image.");
         var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var slide in posted.HeroSlides)
         {

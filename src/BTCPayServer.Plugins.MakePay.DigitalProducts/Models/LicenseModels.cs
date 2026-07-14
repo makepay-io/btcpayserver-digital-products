@@ -9,6 +9,7 @@ public sealed class LicenseManagerSettings
     [StringLength(500)] public string StorefrontDescription { get; set; } = "Secure licenses delivered after payment.";
     [Required, StringLength(10)] public string Currency { get; set; } = "USD";
     [StringLength(500)] public string? LogoUrl { get; set; }
+    [StringLength(500)] public string? FaviconUrl { get; set; }
     [RegularExpression("^#[0-9a-fA-F]{6}$")] public string AccentColor { get; set; } = "#7c3aed";
     public bool DeliverOnProcessing { get; set; }
     public bool RequireSignedRequests { get; set; } = true;

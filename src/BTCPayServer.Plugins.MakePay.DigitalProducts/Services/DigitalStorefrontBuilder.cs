@@ -155,11 +155,20 @@ public static class DigitalStorefrontBuilder
     }
 
     public static bool IsSafePublicResourceUrl(string? value) =>
-        string.IsNullOrWhiteSpace(value) || IsAbsoluteHttpUrl(value) || value.StartsWith('/') && !value.StartsWith("//", StringComparison.Ordinal);
+        string.IsNullOrWhiteSpace(value) || IsAbsoluteHttpUrl(value) || IsSafeRootedPath(value);
+
+    public static string? NormalizePublicResourceUrl(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    public static string? SafePublicResourceUrl(string? value)
+    {
+        var normalized = NormalizePublicResourceUrl(value);
+        return normalized is not null && IsSafePublicResourceUrl(normalized) ? normalized : null;
+    }
 
     public static bool IsSafePublicLink(string? value) =>
         !string.IsNullOrWhiteSpace(value) &&
-        (value.StartsWith('#') || value.StartsWith('/') && !value.StartsWith("//", StringComparison.Ordinal) || IsAbsoluteHttpUrl(value));
+        (value.StartsWith('#') || IsSafeRootedPath(value) || IsAbsoluteHttpUrl(value));
 
     private static bool Matches(DigitalStoreCategory category, StoreProductViewModel product) => category.Rule switch
     {
@@ -174,4 +183,9 @@ public static class DigitalStorefrontBuilder
 
     private static bool IsAbsoluteHttpUrl(string value) =>
         Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https";
+
+    private static bool IsSafeRootedPath(string value) =>
+        value.StartsWith('/') &&
+        !value.StartsWith("//", StringComparison.Ordinal) &&
+        !value.Contains('\\');
 }
