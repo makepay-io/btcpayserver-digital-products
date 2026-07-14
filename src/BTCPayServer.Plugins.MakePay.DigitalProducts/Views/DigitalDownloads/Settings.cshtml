@@ -3,7 +3,11 @@
 @{
     var storeId = ViewData["StoreId"]?.ToString();
     var previewStoreUrl = ViewData["PreviewStoreUrl"]?.ToString();
-    var canonicalStoreUrl = Url.Action("Storefront", "DigitalDownloadsPublic", new { storeId }, Context.Request.Scheme);
+    var canonicalStoreUrl = ViewData["CanonicalStoreUrl"]?.ToString();
+    var digitalProductApps = ViewData["DigitalProductsApps"] as IReadOnlyList<BTCPayServer.Data.AppData> ?? [];
+    var mappedDigitalProductApp = ViewData["MappedDigitalProductsApp"] as BTCPayServer.Data.AppData;
+    var mappedDigitalProductDomain = ViewData["MappedDigitalProductsDomain"]?.ToString();
+    var createDigitalProductAppUrl = ViewData["CreateDigitalProductsAppUrl"]?.ToString();
     var catalogOptions = ViewData["CatalogOptions"] as IReadOnlyList<StoreProductViewModel> ?? [];
     var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
     var heroSlidesJson = JsonSerializer.Serialize(Model.EffectiveHeroSlides(), jsonOptions);
@@ -41,10 +45,18 @@
     <input type="hidden" name="heroSlidesJson" id="heroSlidesJson" value="@heroSlidesJson"><input type="hidden" name="categoriesJson" id="categoriesJson" value="@categoriesJson">
     <div class="row g-4">
         <div class="col-12"><section class="bg-tile rounded p-4 dp-settings-card dp-domain-guide" aria-labelledby="dp-domain-guide-title">
-            <div class="d-flex flex-wrap align-items-start justify-content-between gap-3"><div><h4 id="dp-domain-guide-title">Use your own domain</h4><p class="text-muted mb-0">Publish this storefront through a branded hostname while BTCPay keeps payment and protected delivery on your server.</p></div><span class="badge bg-info text-dark">Server administrator required</span></div>
+            <div class="d-flex flex-wrap align-items-start justify-content-between gap-3"><div><h4 id="dp-domain-guide-title">Use your own domain</h4><p class="text-muted mb-0">Map a dedicated hostname to a native BTCPay Digital Products app identity. The plugin does not claim hostnames or change server TLS settings.</p></div><span class="badge bg-info text-dark">Server administrator required</span></div>
             <div class="row g-3 mt-1">
-                <div class="col-lg-6"><div class="h-100 rounded border p-3"><div class="small text-uppercase fw-semibold text-muted mb-2">Current canonical URL</div>@if(canonicalStoreUrl is not null){<a class="dp-domain-current font-monospace" href="@canonicalStoreUrl" target="_blank" rel="noopener noreferrer">@canonicalStoreUrl</a>}else{<code class="dp-domain-current">/stores/@storeId/downloads</code>}<p class="small text-muted mb-0 mt-2">After a branded hostname is connected, the supported route keeps the same <code>/stores/&lt;storeId&gt;/downloads</code> path.</p></div></div>
+                <div class="col-lg-6"><div class="h-100 rounded border p-3"><div class="small text-uppercase fw-semibold text-muted mb-2">Current canonical URL</div>@if(canonicalStoreUrl is not null){<a class="dp-domain-current font-monospace" href="@canonicalStoreUrl" target="_blank" rel="noopener noreferrer">@canonicalStoreUrl</a>}else{<code class="dp-domain-current">/stores/@storeId/downloads</code>}<p class="small text-muted mb-0 mt-2">When clean routing is enabled, every storefront, cart, sign-in, checkout, purchase, asset, preview, stream, and protected download URL uses <code>/downloads</code>.</p></div></div>
                 <div class="col-lg-6"><div class="h-100 rounded border p-3"><div class="small text-uppercase fw-semibold text-muted mb-2">Recommended setup</div><p class="mb-2">Use a dedicated hostname such as <code>shop.example.com</code>. Configure DNS first, then have the BTCPay server administrator enable that hostname and HTTPS.</p><p class="small text-muted mb-0">A CNAME alone is insufficient: the receiving reverse proxy must accept the hostname and present a valid TLS certificate.</p></div></div>
+            </div>
+            <div class="rounded border p-3 mt-3">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-3"><div><div class="small text-uppercase fw-semibold text-muted mb-1">Native BTCPay app identity</div><p class="mb-0">The app record is created explicitly so a server administrator can select it in <strong>Server settings → Policies → Domain mapping</strong>.</p></div>@if(digitalProductApps.Count==0 && createDigitalProductAppUrl is not null){<a class="btn btn-primary" href="@createDigitalProductAppUrl">Create Digital Products app</a>}</div>
+                @if(digitalProductApps.Count==0){<div class="alert alert-info small mb-0 mt-3">No Digital Products app exists for this store yet. Create one, give it a clear name, then return here. Creating the app does not publish or change the storefront by itself.</div>}else{
+                    <div class="list-group mt-3">@foreach(var app in digitalProductApps){var isMapped=mappedDigitalProductDomain is not null && mappedDigitalProductApp?.Id==app.Id;<div class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2"><div><strong>@app.Name</strong><div class="small text-muted font-monospace">@app.Id</div></div>@if(isMapped){<span class="badge bg-success">Mapped to @mappedDigitalProductDomain</span>}else{<span class="badge bg-secondary">Not mapped</span>}</div>}</div>
+                    @if(digitalProductApps.Count>1){<div class="alert alert-warning small mb-0 mt-3">More than one Digital Products app exists for this store. Keep one active identity and archive duplicates; the storefront uses the app selected by native domain mapping.</div>}
+                    @if(mappedDigitalProductDomain is null){<div class="alert alert-info small mb-0 mt-3">No active native mapping points to this store. In <strong>Server settings → Policies → Domain mapping</strong>, use the exact normalized ASCII hostname (punycode for an internationalized domain, with no scheme, port, whitespace, or trailing dot). If duplicate rows use the same exact hostname, BTCPay does not reject them: only the first global row wins, so remove or reorder any earlier row.</div>}
+                }
             </div>
             <details class="dp-domain-step mt-3">
                 <summary>Server command template for an official BTCPay Docker deployment</summary>
@@ -60,10 +72,10 @@ export BTCPAY_ADDITIONAL_HOSTS="&lt;your-new-host&gt;,&lt;all-existing-additiona
                 <p class="small text-muted mt-2 mb-0"><code>BTCPAY_ADDITIONAL_HOSTS</code> aliases the whole BTCPay Server, not only this store. Other BTCPay and store-scoped public routes remain reachable on that hostname; do not treat it as domain-to-store isolation.</p>
             </details>
             <details class="dp-domain-step mt-3">
-                <summary>About a clean <code>/downloads</code> URL or an existing website</summary>
-                <p>The hostname setup above makes <code>https://shop.example.com/stores/&lt;storeId&gt;/downloads</code> available. DNS and <code>BTCPAY_ADDITIONAL_HOSTS</code> do not remove the store-scoped route.</p>
-                <p>A clean <code>https://shop.example.com/downloads</code> address needs a host-to-store short-route implementation in the plugin, or a correctly configured external reverse proxy that rewrites the storefront and every related asset, checkout, callback, and protected-delivery route. Digital Products is not currently registered as a BTCPay App, so Server Settings → Policies cannot map it to a clean root route.</p>
-                <p class="mb-0">If <code>example.com</code> already hosts another website, that website's reverse proxy or CDN must own the path routing. This cannot be configured from inside the BTCPay plugin; a dedicated subdomain is safer.</p>
+                <summary>Enable the clean <code>/downloads</code> route</summary>
+                <ol class="mb-3 ps-3"><li class="mb-2">Complete DNS, TLS, and <code>BTCPAY_ADDITIONAL_HOSTS</code> first.</li><li class="mb-2">Create the Digital Products app identity above if it does not exist.</li><li class="mb-2">As a BTCPay server administrator, open <strong>Server settings → Policies → Domain mapping</strong>, enter the exact normalized ASCII hostname (punycode when needed), and select that Digital Products app. Do not include a scheme, port, whitespace, or trailing dot.</li><li class="mb-2">Check the global list for the same exact hostname. BTCPay accepts duplicates but always selects the first matching row, so remove or reorder any earlier duplicate.</li><li class="mb-2">Verify <code>https://your-host/downloads</code>, cart, sign-in, checkout, and a protected delivery link.</li></ol>
+                <p>BTCPay's native domain mapping resolves the request to AppData, and the plugin derives the store from that record. Query and form values cannot select another store. Existing <code>/stores/&lt;storeId&gt;/downloads</code> routes remain available for compatibility; safe GET/HEAD visits are canonicalized when a mapping exists. Legacy visits through a <code>.onion</code> hostname stay on that Tor origin, including checkout and customer-library links.</p>
+                <p class="mb-0">If <code>example.com</code> already hosts another website, that website's reverse proxy or CDN must explicitly send <code>/downloads</code> to BTCPay, including every nested asset and protected-delivery route. A dedicated subdomain remains safer and simpler.</p>
             </details>
             <div class="dp-domain-links small mt-3">
                 <a href="https://docs.btcpayserver.org/Docker/#environment-variables" target="_blank" rel="noopener noreferrer">Docker additional-host settings</a>

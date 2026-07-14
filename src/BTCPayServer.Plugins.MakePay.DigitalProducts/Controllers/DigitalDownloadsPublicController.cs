@@ -7,6 +7,7 @@ using BTCPayServer.Abstractions.Extensions;
 using BTCPayServer.Client.Models;
 using BTCPayServer.Controllers;
 using BTCPayServer.Data;
+using BTCPayServer.Filters;
 using BTCPayServer.Plugins.Emails.Services;
 using BTCPayServer.Plugins.MakePay.DigitalProducts.Models;
 using BTCPayServer.Plugins.MakePay.DigitalProducts.Services;
@@ -17,13 +18,14 @@ using BTCPayServer.Services.Stores;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Routing;
 using MimeKit;
 using NicolasDorier.RateLimits;
 
 namespace BTCPayServer.Plugins.MakePay.DigitalProducts.Controllers;
 
-[Route("stores/{storeId}/downloads")]
-public sealed class DigitalDownloadsPublicController(
+public abstract class DigitalDownloadsPublicControllerBase(
     StoreRepository stores,
     DigitalDownloadsRepository repository,
     LicenseRepository licenses,
@@ -35,8 +37,11 @@ public sealed class DigitalDownloadsPublicController(
     DigitalCheckoutService checkoutService,
     CustomerAccessService access,
     LicenseSecurityService licenseSecurity,
+    DigitalPublicUrlService publicUrls,
     EmailSenderFactory emailFactory) : Controller
 {
+    protected abstract bool CleanUrls { get; }
+    protected DigitalPublicUrlService PublicUrls { get; } = publicUrls;
     [HttpGet("assets/hero")]
     [ResponseCache(Duration = 86400, Location = ResponseCacheLocation.Any)]
     public IActionResult HeroAsset()
@@ -105,7 +110,7 @@ public sealed class DigitalDownloadsPublicController(
         category ??= type?.Equals("downloads", StringComparison.OrdinalIgnoreCase) == true ? "downloads" :
             type?.Equals("licenses", StringComparison.OrdinalIgnoreCase) == true ? "licenses" : null;
         var selectedCategory = categories.FirstOrDefault(item => item.Slug.Equals(category, StringComparison.OrdinalIgnoreCase));
-        var fallbackHeroUrl = Url.Action(nameof(HeroAsset), new { storeId })!;
+        var fallbackHeroUrl = PublicAction(storeId, nameof(HeroAsset));
         return View("~/Views/DigitalDownloads/Public/Storefront.cshtml", new StorefrontViewModel
         {
             StoreId = storeId,
@@ -115,12 +120,11 @@ public sealed class DigitalDownloadsPublicController(
             LicenseProducts = await licenses.GetProducts(storeId),
             Catalog = DigitalStorefrontBuilder.FilterCatalog(catalog, selectedCategory),
             HeroSlides = DigitalStorefrontBuilder.BuildHeroSlides(settings, catalog, fallbackHeroUrl,
-                product => Url.Action(nameof(Product), new
+                product => PublicAction(storeId, nameof(Product), new
                 {
-                    storeId,
                     kind = DigitalStorefrontBuilder.ProductKindSegment(product),
                     productId = product.Slug
-                })!),
+                })),
             Categories = categories,
             ActiveCategorySlug = selectedCategory?.Slug,
             CartCount = Cart(storeId).Lines.Sum(line => line.Quantity),
@@ -183,7 +187,7 @@ public sealed class DigitalDownloadsPublicController(
         var cart = Cart(storeId);
         carts.Add(cart, kind, productId, quantity);
         SaveCart(storeId, cart);
-        return Redirect(LocalReturn(returnUrl, Url.Action(nameof(CartPage), new { storeId })!));
+        return Redirect(LocalReturn(returnUrl, PublicAction(storeId, nameof(CartPage))));
     }
 
     [HttpGet("cart")]
@@ -207,14 +211,14 @@ public sealed class DigitalDownloadsPublicController(
         var cart = Cart(storeId);
         carts.Update(cart, kind, productId, quantity);
         SaveCart(storeId, cart);
-        return RedirectToAction(nameof(CartPage), new { storeId });
+        return Redirect(PublicAction(storeId, nameof(CartPage)));
     }
 
     [HttpGet("login")]
     public async Task<IActionResult> Login(string storeId, string? returnUrl, string? email, bool codeSent = false)
     {
         if (await stores.FindStore(storeId) is null) return NotFound();
-        var target = LocalReturn(returnUrl, Url.Action(nameof(Account), new { storeId })!);
+        var target = LocalReturn(returnUrl, PublicAction(storeId, nameof(Account)));
         if (CustomerEmail(storeId) is not null) return Redirect(target);
         return View("~/Views/DigitalDownloads/Public/Login.cshtml", new CustomerLoginViewModel
         {
@@ -232,7 +236,7 @@ public sealed class DigitalDownloadsPublicController(
     {
         if (await stores.FindStore(storeId) is null) return NotFound();
         var settings = await repository.GetSettings(storeId);
-        var target = LocalReturn(returnUrl, Url.Action(nameof(Account), new { storeId })!);
+        var target = LocalReturn(returnUrl, PublicAction(storeId, nameof(Account)));
         if (!settings.CustomerAccountsEnabled || !new EmailAddressAttribute().IsValid(email))
             return LoginError(storeId, settings, target, email, "Enter a valid email address.");
         var zone = $"makepay-dp-login-{storeId}-{CustomerAccessService.NormalizeEmail(email)}-{HttpContext.Connection.RemoteIpAddress}";
@@ -253,7 +257,7 @@ public sealed class DigitalDownloadsPublicController(
         {
             return LoginError(storeId, settings, target, email, "The sign-in email could not be sent. Ask the merchant to check the BTCPay store email settings.");
         }
-        return RedirectToAction(nameof(Login), new { storeId, returnUrl = target, email = email.Trim(), codeSent = true });
+        return Redirect(PublicAction(storeId, nameof(Login), new { returnUrl = target, email = email.Trim(), codeSent = true }));
     }
 
     [HttpPost("login/verify")]
@@ -262,7 +266,7 @@ public sealed class DigitalDownloadsPublicController(
     {
         if (await stores.FindStore(storeId) is null) return NotFound();
         var settings = await repository.GetSettings(storeId);
-        var target = LocalReturn(returnUrl, Url.Action(nameof(Account), new { storeId })!);
+        var target = LocalReturn(returnUrl, PublicAction(storeId, nameof(Account)));
         if (!new EmailAddressAttribute().IsValid(email)) return LoginError(storeId, settings, target, email, "Enter a valid email address.");
         var normalized = CustomerAccessService.NormalizeEmail(email);
         var challenge = await repository.GetLatestLoginChallenge(storeId, normalized);
@@ -286,7 +290,7 @@ public sealed class DigitalDownloadsPublicController(
     public IActionResult Logout(string storeId)
     {
         Response.Cookies.Delete(SessionCookie(storeId), new CookieOptions { Path = "/", Secure = Request.IsHttps, SameSite = SameSiteMode.Lax });
-        return RedirectToAction(nameof(Storefront), new { storeId });
+        return Redirect(PublicAction(storeId, nameof(Storefront)));
     }
 
     [HttpPost("checkout")]
@@ -294,20 +298,21 @@ public sealed class DigitalDownloadsPublicController(
     public async Task<IActionResult> Checkout(string storeId, CancellationToken cancellationToken)
     {
         var email = CustomerEmail(storeId);
-        if (email is null) return RedirectToAction(nameof(Login), new { storeId, returnUrl = Url.Action(nameof(CartPage), new { storeId }) });
+        if (email is null) return Redirect(PublicAction(storeId, nameof(Login), new { returnUrl = PublicAction(storeId, nameof(CartPage)) }));
         var zone = $"makepay-dp-checkout-{storeId}-{HttpContext.Connection.RemoteIpAddress}";
         if (!await rateLimits.Throttle(ZoneLimits.PublicInvoices, zone, cancellationToken)) return StatusCode(StatusCodes.Status429TooManyRequests);
         var store = await stores.FindStore(storeId);
         if (store is null) return NotFound();
         var settings = await repository.GetSettings(storeId);
         var lines = checkoutService.ResolveCart(Cart(storeId), await Catalog(storeId));
-        if (lines.Count == 0) return RedirectToAction(nameof(CartPage), new { storeId });
-        var checkout = checkoutService.Create(storeId, email, settings.Currency, lines, Request.GetAbsoluteRoot());
+        if (lines.Count == 0) return Redirect(PublicAction(storeId, nameof(CartPage)));
+        var publicBaseUrl = await PublicBaseUrl(storeId);
+        var checkout = checkoutService.Create(storeId, email, settings.Currency, lines, publicBaseUrl);
         var accessToken = access.CreateCheckoutAccess(checkout);
         await repository.SaveCheckout(storeId, checkout);
         try
         {
-            var successUrl = Url.ActionLink(nameof(Purchase), values: new { storeId, checkoutId = checkout.Id, accessToken })!;
+            var successUrl = await PublicAbsolute(storeId, nameof(Purchase), new { checkoutId = checkout.Id, accessToken });
             var invoice = await invoices.CreateInvoiceCoreRaw(new CreateInvoiceRequest
             {
                 Amount = checkout.Total,
@@ -325,7 +330,7 @@ public sealed class DigitalDownloadsPublicController(
             checkout.InvoiceId = invoice.Id;
             await repository.SaveCheckout(storeId, checkout);
             SaveCart(storeId, new());
-            return RedirectToAction(nameof(Payment), new { storeId, checkoutId = checkout.Id, accessToken });
+            return Redirect(PublicAction(storeId, nameof(Payment), new { checkoutId = checkout.Id, accessToken }));
         }
         catch
         {
@@ -339,7 +344,7 @@ public sealed class DigitalDownloadsPublicController(
     {
         var checkout = await repository.GetCheckout(storeId, checkoutId);
         if (checkout is null || !access.CanAccess(checkout, accessToken, CustomerEmail(storeId))) return NotFound();
-        if (checkout.Status == DigitalCheckoutStatus.Paid) return RedirectToAction(nameof(Purchase), new { storeId, checkoutId, accessToken });
+        if (checkout.Status == DigitalCheckoutStatus.Paid) return Redirect(PublicAction(storeId, nameof(Purchase), new { checkoutId, accessToken }));
         return View("~/Views/DigitalDownloads/Public/Payment.cshtml", new DigitalPaymentViewModel { StoreId = storeId, Settings = await repository.GetSettings(storeId), Checkout = checkout, AccessToken = accessToken ?? access.RecoverCheckoutAccess(checkout) ?? "" });
     }
 
@@ -351,7 +356,7 @@ public sealed class DigitalDownloadsPublicController(
         if (checkout is null || !access.CanAccess(checkout, accessToken, CustomerEmail(storeId))) return NotFound();
         return checkout.Status switch
         {
-            DigitalCheckoutStatus.Paid => Json(new DigitalPaymentStatus("paid", Url.Action(nameof(Purchase), new { storeId, checkoutId, accessToken }), "Your products are ready.")),
+            DigitalCheckoutStatus.Paid => Json(new DigitalPaymentStatus("paid", PublicAction(storeId, nameof(Purchase), new { checkoutId, accessToken }), "Your products are ready.")),
             DigitalCheckoutStatus.Cancelled => Json(new DigitalPaymentStatus("cancelled", null, "This invoice is no longer payable.")),
             _ => Json(new DigitalPaymentStatus("pending", null, "Waiting for BTCPay confirmation."))
         };
@@ -379,7 +384,7 @@ public sealed class DigitalDownloadsPublicController(
     public async Task<IActionResult> Account(string storeId)
     {
         var email = CustomerEmail(storeId);
-        if (email is null) return RedirectToAction(nameof(Login), new { storeId, returnUrl = Url.Action(nameof(Account), new { storeId }) });
+        if (email is null) return Redirect(PublicAction(storeId, nameof(Login), new { returnUrl = PublicAction(storeId, nameof(Account)) }));
         var checkouts = (await repository.GetCheckouts(storeId)).Where(checkout => CustomerAccessService.NormalizeEmail(checkout.BuyerEmail) == email).ToList();
         var downloadOrders = (await repository.GetOrders(storeId)).Where(order => CustomerAccessService.NormalizeEmail(order.BuyerEmail) == email && order.Status == DigitalOrderStatus.Paid).ToList();
         var managedLicenses = (await licenses.GetLicenses(storeId)).Where(license => CustomerAccessService.NormalizeEmail(license.CustomerEmail) == email).ToList();
@@ -407,16 +412,16 @@ public sealed class DigitalDownloadsPublicController(
         if (store is null || product is null || !product.Active) return NotFound();
         if (!new EmailAddressAttribute().IsValid(email)) return BadRequest("A valid delivery email is required.");
         var settings = await repository.GetSettings(storeId);
-        var order = new DigitalOrder { StoreId = storeId, ProductId = product.Id, BuyerEmail = email.Trim(), PublicBaseUrl = Request.GetAbsoluteRoot(), Status = DigitalOrderStatus.Pending, ProductSnapshot = DigitalProductSnapshot.From(product) };
+        var order = new DigitalOrder { StoreId = storeId, ProductId = product.Id, BuyerEmail = email.Trim(), PublicBaseUrl = await PublicBaseUrl(storeId), Status = DigitalOrderStatus.Pending, ProductSnapshot = DigitalProductSnapshot.From(product) };
         await repository.SaveOrder(storeId, order);
         try
         {
-            var successUrl = Url.ActionLink(nameof(Order), values: new { storeId, orderId = order.Id })!;
+            var successUrl = await PublicAbsolute(storeId, nameof(Order), new { orderId = order.Id });
             var invoice = await invoices.CreateInvoiceCoreRaw(new CreateInvoiceRequest
             {
                 Amount = product.Price,
                 Currency = settings.Currency,
-                Metadata = new InvoiceMetadata { BuyerEmail = order.BuyerEmail, ItemCode = product.Id, ItemDesc = product.Name, OrderId = order.Id, OrderUrl = Request.GetDisplayUrl() }.ToJObject(),
+                Metadata = new InvoiceMetadata { BuyerEmail = order.BuyerEmail, ItemCode = product.Id, ItemDesc = product.Name, OrderId = order.Id, OrderUrl = successUrl }.ToJObject(),
                 Checkout = new InvoiceDataBase.CheckoutOptions { RedirectAutomatically = true, RedirectURL = successUrl }
             }, store, Request.GetAbsoluteRoot(), [DigitalDeliveryService.Tag(order.Id)], cancellationToken);
             order.InvoiceId = invoice.Id;
@@ -433,16 +438,17 @@ public sealed class DigitalDownloadsPublicController(
         if (order is null) return NotFound();
         var product = await PurchasedProduct(storeId, order);
         if (product is null) return NotFound();
+        var settings = await repository.GetSettings(storeId);
         string? downloadUrl = null;
         string? streamUrl = null;
         if (order.Status == DigitalOrderStatus.Paid && tokens.Unprotect(order.ProtectedToken) is { } token)
         {
             if (product.DeliveryMode != DigitalDeliveryMode.Stream)
-                downloadUrl = Url.ActionLink(nameof(Download), values: new { storeId, orderId, token });
+                downloadUrl = await PublicAbsolute(storeId, nameof(Download), new { orderId, token });
             if (product.DeliveryMode != DigitalDeliveryMode.Download && product.ProductType is DigitalProductType.PdfEbook or DigitalProductType.Audio or DigitalProductType.Video)
-                streamUrl = Url.ActionLink(nameof(Stream), values: new { storeId, orderId, token });
+                streamUrl = await PublicAbsolute(storeId, nameof(Stream), new { orderId, token });
         }
-        return View("~/Views/DigitalDownloads/Public/Order.cshtml", new OrderViewModel { Settings = await repository.GetSettings(storeId), Product = product, Order = order, DownloadUrl = downloadUrl, StreamUrl = streamUrl });
+        return View("~/Views/DigitalDownloads/Public/Order.cshtml", new OrderViewModel { Settings = settings, Product = product, Order = order, DownloadUrl = downloadUrl, StreamUrl = streamUrl });
     }
 
     [HttpGet("order/{orderId}/file")]
@@ -488,9 +494,9 @@ public sealed class DigitalDownloadsPublicController(
             if (order.Status == DigitalOrderStatus.Paid && tokens.Unprotect(order.ProtectedToken) is { } token)
             {
                 if (product.DeliveryMode != DigitalDeliveryMode.Stream)
-                    url = Url.Action(nameof(Download), new { storeId, orderId = order.Id, token });
+                    url = PublicAction(storeId, nameof(Download), new { orderId = order.Id, token });
                 if (product.DeliveryMode != DigitalDeliveryMode.Download && product.ProductType is DigitalProductType.PdfEbook or DigitalProductType.Audio or DigitalProductType.Video)
-                    streamUrl = Url.Action(nameof(Stream), new { storeId, orderId = order.Id, token });
+                    streamUrl = PublicAction(storeId, nameof(Stream), new { orderId = order.Id, token });
             }
             result.Add(new CustomerDownloadViewModel { Order = order, Product = product, DownloadUrl = url, StreamUrl = streamUrl });
         }
@@ -606,5 +612,121 @@ public sealed class DigitalDownloadsPublicController(
             result.Add(new CustomerLicenseViewModel { License = license, Product = product, LicenseKey = licenseSecurity.Unprotect(license.ProtectedKey) });
         }
         return result;
+    }
+
+    private string PublicAction(string storeId, string action, object? values = null)
+    {
+        var routeValues = new RouteValueDictionary(values);
+        if (CleanUrls) routeValues.Remove("storeId");
+        else routeValues["storeId"] = storeId;
+        var url = Url.Action(action,
+                      CleanUrls ? DigitalPublicUrlService.CleanController : DigitalPublicUrlService.LegacyController,
+                      routeValues) ??
+                     throw new InvalidOperationException($"Could not generate the Digital Products route for {action}.");
+        return PublicUrls.ForRequest(HttpContext, storeId, url);
+    }
+
+    private async Task<string> PublicAbsolute(string storeId, string action, object? values = null)
+    {
+        var routeValues = new RouteValueDictionary(values) { ["storeId"] = storeId };
+        var legacy = Url.Action(action, DigitalPublicUrlService.LegacyController, routeValues) ??
+                     throw new InvalidOperationException($"Could not generate the Digital Products route for {action}.");
+        return await PublicUrls.Absolute(storeId, Request.GetAbsoluteRoot(), legacy);
+    }
+
+    private Task<string> PublicBaseUrl(string storeId) =>
+        PublicUrls.Origin(storeId, Request.GetAbsoluteRoot());
+}
+
+[Route("stores/{storeId}/downloads")]
+public sealed class DigitalDownloadsPublicController(
+    StoreRepository stores,
+    DigitalDownloadsRepository repository,
+    LicenseRepository licenses,
+    UIInvoiceController invoices,
+    ProductFileService files,
+    DownloadTokenService tokens,
+    IRateLimitService rateLimits,
+    DigitalCartService carts,
+    DigitalCheckoutService checkoutService,
+    CustomerAccessService access,
+    LicenseSecurityService licenseSecurity,
+    DigitalPublicUrlService publicUrls,
+    DigitalProductsAppService digitalApps,
+    EmailSenderFactory emailFactory)
+    : DigitalDownloadsPublicControllerBase(stores, repository, licenses, invoices, files, tokens, rateLimits,
+        carts, checkoutService, access, licenseSecurity, publicUrls, emailFactory)
+{
+    protected override bool CleanUrls => false;
+
+    public override async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+    {
+        var storeId = context.RouteData.Values["storeId"] as string ?? "";
+        var (app, domain) = await digitalApps.MappingForStore(storeId);
+        if (!Request.IsOnion())
+        {
+            DigitalPublicUrlService.SetMapping(HttpContext, storeId, domain);
+            if (app is not null) HttpContext.SetAppData(app);
+        }
+
+        if ((HttpMethods.IsGet(Request.Method) || HttpMethods.IsHead(Request.Method)) &&
+            domain is not null && !Request.IsOnion())
+        {
+            var redirect = DigitalPublicUrlService.CleanUrlFromLegacy(
+                await PublicUrls.MappedBaseUrl(storeId), storeId, Request.PathBase, Request.Path, Request.QueryString);
+            if (redirect is not null)
+            {
+                context.Result = new RedirectResult(redirect, permanent: true, preserveMethod: true);
+                return;
+            }
+        }
+        await next();
+    }
+}
+
+[Route("downloads")]
+[DomainMappingConstraint(DigitalProductsAppType.AppType)]
+public sealed class CleanDigitalDownloadsPublicController(
+    StoreRepository stores,
+    DigitalDownloadsRepository repository,
+    LicenseRepository licenses,
+    UIInvoiceController invoices,
+    ProductFileService files,
+    DownloadTokenService tokens,
+    IRateLimitService rateLimits,
+    DigitalCartService carts,
+    DigitalCheckoutService checkoutService,
+    CustomerAccessService access,
+    LicenseSecurityService licenseSecurity,
+    DigitalPublicUrlService publicUrls,
+    DigitalProductsAppService digitalApps,
+    EmailSenderFactory emailFactory)
+    : DigitalDownloadsPublicControllerBase(stores, repository, licenses, invoices, files, tokens, rateLimits,
+        carts, checkoutService, access, licenseSecurity, publicUrls, emailFactory)
+{
+    protected override bool CleanUrls => true;
+
+    [HttpGet("/")]
+    public IActionResult Root() => Redirect(Url.Content("~/downloads"));
+
+    public override async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+    {
+        var appId = RouteData.Values["appId"] as string;
+        var app = string.IsNullOrWhiteSpace(appId) ? null : await digitalApps.Get(appId);
+        var domain = app is null ? null : digitalApps.MappedDomain(app, Request.Host.Host);
+        if (app is null || domain is null)
+        {
+            context.Result = NotFound();
+            return;
+        }
+
+        // The tenant is always derived from native BTCPay AppData. A query or
+        // form value named storeId cannot select another store.
+        if (context.ActionArguments.ContainsKey("storeId"))
+            context.ActionArguments["storeId"] = app.StoreDataId;
+        context.RouteData.Values["storeId"] = app.StoreDataId;
+        DigitalPublicUrlService.SetMapping(HttpContext, app.StoreDataId, domain);
+        HttpContext.SetAppData(app);
+        await next();
     }
 }

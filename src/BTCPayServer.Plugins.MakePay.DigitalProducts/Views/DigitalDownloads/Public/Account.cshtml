@@ -2,7 +2,7 @@
 @{
     Layout = null;
     ViewData["StoreId"] = Model.StoreId;
-    var mediaScriptUrl = Url.Action("Asset", "DigitalDownloadsAssets", new { storeId = Model.StoreId, fileName = "makepay-media.js" });
+    var mediaScriptUrl = PublicUrls.ForRequest(Context, Model.StoreId, Url.Action("Asset", "DigitalDownloadsAssets", new { storeId = Model.StoreId, fileName = "makepay-media.js" })!);
     var analytics = new DigitalAnalyticsViewModel { StoreId = Model.StoreId, Settings = Model.Settings, PageType = "account" };
 }
 <!doctype html>

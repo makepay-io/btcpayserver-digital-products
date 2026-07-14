@@ -3,6 +3,7 @@ using BTCPayServer.Abstractions.Contracts;
 using BTCPayServer.Abstractions.Models;
 using BTCPayServer.Plugins.MakePay.DigitalProducts.Services;
 using BTCPayServer.Plugins.MakePay.LicenseManager.Services;
+using BTCPayServer.Services.Apps;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -10,7 +11,7 @@ namespace BTCPayServer.Plugins.MakePay.DigitalProducts;
 
 public sealed class DigitalProductsPlugin : BaseBTCPayServerPlugin
 {
-    public const string PluginVersion = "1.4.2";
+    public const string PluginVersion = "1.5.0";
     public const string SettingsKey = "MakePay.DigitalDownloads.Settings";
     public const string CatalogKey = "MakePay.DigitalDownloads.Catalog";
     public const string OrdersKey = "MakePay.DigitalDownloads.Orders";
@@ -29,6 +30,9 @@ public sealed class DigitalProductsPlugin : BaseBTCPayServerPlugin
     public override void Execute(IServiceCollection services)
     {
         services.AddSingleton<DigitalDownloadsRepository>();
+        services.AddSingleton<DigitalProductsAppService>();
+        services.AddSingleton<AppBaseType, DigitalProductsAppType>();
+        services.AddSingleton<DigitalPublicUrlService>();
         services.AddSingleton<DownloadTokenService>();
         services.AddSingleton<CustomerAccessService>();
         services.AddSingleton<DigitalCartService>();

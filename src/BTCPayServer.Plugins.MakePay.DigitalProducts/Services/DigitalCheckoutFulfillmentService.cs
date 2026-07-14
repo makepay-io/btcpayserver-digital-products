@@ -20,6 +20,7 @@ public sealed class DigitalCheckoutFulfillmentService(
     DownloadTokenService tokens,
     CustomerAccessService access,
     LicenseFulfillmentService licenseFulfillment,
+    DigitalPublicUrlService publicUrls,
     EmailSenderFactory emailFactory) : EventHostedServiceBase(events, logger)
 {
     public const string TagPrefix = "MPDP#";
@@ -159,9 +160,13 @@ public sealed class DigitalCheckoutFulfillmentService(
         if (!settings.EmailDeliveryEnabled || string.IsNullOrWhiteSpace(checkout.BuyerEmail)) return;
         var accessToken = access.RecoverCheckoutAccess(checkout);
         if (accessToken is null) return;
-        var root = checkout.PublicBaseUrl.TrimEnd('/');
-        var purchaseUrl = $"{root}/stores/{checkout.StoreId}/downloads/purchase/{checkout.Id}?accessToken={Uri.EscapeDataString(accessToken)}";
-        var libraryUrl = $"{root}/stores/{checkout.StoreId}/downloads/login?returnUrl={Uri.EscapeDataString($"/stores/{checkout.StoreId}/downloads/account")}";
+        var legacyPrefix = DigitalPublicUrlService.LegacyPrefix(checkout.StoreId);
+        var purchaseUrl = await publicUrls.Absolute(checkout.StoreId, checkout.PublicBaseUrl,
+            $"{legacyPrefix}/purchase/{checkout.Id}?accessToken={Uri.EscapeDataString(accessToken)}");
+        var libraryReturnPath = await publicUrls.CanonicalPath(
+            checkout.StoreId, checkout.PublicBaseUrl, legacyPrefix + "/account");
+        var libraryUrl = await publicUrls.Absolute(checkout.StoreId, checkout.PublicBaseUrl,
+            $"{legacyPrefix}/login?returnUrl={Uri.EscapeDataString(libraryReturnPath)}");
         string E(string value) => HtmlEncoder.Default.Encode(value);
         var body = settings.PurchaseEmailHtml
             .Replace("{StoreName}", E(settings.StorefrontTitle), StringComparison.Ordinal)
