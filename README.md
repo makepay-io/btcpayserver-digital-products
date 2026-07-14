@@ -2,6 +2,8 @@
 
 A self-hosted BTCPay Server plugin for selling digital media and generated software licenses from one branded storefront. Customers can combine products in one cart, sign in with a one-time email code, pay through BTCPay's JavaScript checkout modal, and return to a private purchase library.
 
+Version 1.4.1 adds a per-store favicon URL and managed local favicon upload. The configured icon is emitted consistently across the shop, product, cart, sign-in, payment, confirmation, purchase-library, protected-delivery, and legacy license pages; an empty setting emits no custom favicon tag.
+
 Version 1.4 adds consent-aware Google Tag Manager and direct Google Analytics 4 commerce analytics to the media storefront introduced in version 1.3. The existing file-download and license data model remains compatible:
 
 - **File download** — protected delivery for archives, source files, templates, and other downloadable assets.
@@ -16,7 +18,7 @@ Existing per-store settings, products, orders, issued licenses, and API credenti
 ## Storefront and administration
 
 - A professional BTCPay-native product editor with media-type selection, delivery controls, metadata, cover art, preview/demo management, fulfillment configuration, and publication state.
-- An editable storefront with responsive product cards, product detail pages, type-aware previews, custom categories, hero slides, logo, colors, typography, and page content.
+- An editable storefront with responsive product cards, product detail pages, type-aware previews, custom categories, hero slides, logo, favicon, colors, typography, and page content.
 - Empty categories are hidden. Existing custom categories and explicit product selections continue to work.
 - Passwordless customer access using encrypted, one-time, expiring email codes and encrypted store-scoped sessions.
 - A private customer library with protected downloads and streams, recoverable license keys, activation state, and checkout history.
@@ -76,7 +78,7 @@ Install the published plugin folder in the BTCPay Server plugin directory, resta
 
 1. Back up the BTCPay data directory.
 2. If present, remove the standalone `BTCPayServer.Plugins.MakePay.LicenseManager` plugin folder.
-3. Install `BTCPayServer.Plugins.MakePay.DigitalProducts` version 1.4.0 or newer.
+3. Install `BTCPayServer.Plugins.MakePay.DigitalProducts` version 1.4.1 or newer.
 4. Restart BTCPay Server. Existing products default to **File download**, existing License Manager storage remains readable, and the new empty media categories stay hidden until products are added.
 
 Use private S3 buckets and dedicated read-only credentials. The optional IP lock is useful against casual link sharing but can inconvenience mobile users whose network address changes. Download and license delivery defaults to settled/confirmed invoices; enabling delivery at Processing accepts additional payment risk.

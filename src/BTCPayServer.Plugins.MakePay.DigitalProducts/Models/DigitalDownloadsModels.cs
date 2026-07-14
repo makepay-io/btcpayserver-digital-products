@@ -103,6 +103,7 @@ public sealed class DigitalDownloadsSettings
     [StringLength(240)] public string StorefrontAnnouncement { get; set; } = "Secure digital products, paid directly with BTCPay Server.";
     [Required, StringLength(10)] public string Currency { get; set; } = "USD";
     [StringLength(500)] public string? LogoUrl { get; set; }
+    [StringLength(500)] public string? FaviconUrl { get; set; }
     [Range(80, 360)] public int LogoWidth { get; set; } = 190;
     [Range(24, 120)] public int LogoHeight { get; set; } = 40;
     [StringLength(500)] public string? HeroImageUrl { get; set; }

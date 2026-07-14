@@ -91,6 +91,7 @@ public sealed class DigitalDownloadsPublicController(
         if (asset is null) return NotFound();
         Response.RegisterForDisposeAsync(asset);
         Response.ContentLength = asset.Length;
+        Response.Headers.XContentTypeOptions = "nosniff";
         return File(asset.Stream, asset.ContentType, enableRangeProcessing: true);
     }
 
