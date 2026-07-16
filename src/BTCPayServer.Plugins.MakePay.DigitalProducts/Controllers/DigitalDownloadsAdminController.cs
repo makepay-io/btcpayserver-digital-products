@@ -29,17 +29,33 @@ public sealed class DigitalDownloadsAdminController(
     DigitalProductsAppService digitalApps) : Controller
 {
     [HttpGet("")]
-    public async Task<IActionResult> Index(string storeId, string? section = null)
+    public async Task<IActionResult> Index(
+        string storeId,
+        string? section = null,
+        string? orderSearch = null,
+        string? orderProductId = null,
+        string? orderStatus = null,
+        int orderPage = 1,
+        int orderPageSize = 25)
     {
         if (await stores.FindStore(storeId) is null) return NotFound();
         var activeSection = string.Equals(section, "licenses", StringComparison.OrdinalIgnoreCase) ? "licenses" : "products";
+        var products = await repository.GetProducts(storeId);
+        var orderPageModel = DigitalOrderAdminQuery.Apply(
+            await repository.GetOrders(storeId),
+            products,
+            orderSearch,
+            orderProductId,
+            orderStatus,
+            orderPage,
+            orderPageSize);
         ViewData.SetActivePage("DigitalDownloads", "Digital Products", activeSection == "licenses" ? "License keys" : "Products");
         return View("~/Views/DigitalDownloads/Index.cshtml", new DigitalDownloadsDashboardViewModel
         {
             StoreId = storeId,
             Settings = await repository.GetSettings(storeId),
-            Products = await repository.GetProducts(storeId),
-            Orders = (await repository.GetOrders(storeId)).Take(100).ToList(),
+            Products = products,
+            OrderPage = orderPageModel,
             LicenseSettings = await licenses.GetSettings(storeId),
             LicenseProducts = await licenses.GetProducts(storeId),
             Licenses = (await licenses.GetLicenses(storeId)).Take(200).ToList(),
@@ -434,9 +450,26 @@ public sealed class DigitalDownloadsAdminController(
     }
 
     [HttpPost("orders/{orderId}/revoke")]
-    public async Task<IActionResult> Revoke(string storeId, string orderId)
+    public async Task<IActionResult> Revoke(
+        string storeId,
+        string orderId,
+        string? orderSearch = null,
+        string? orderProductId = null,
+        string? orderStatus = null,
+        int orderPage = 1,
+        int orderPageSize = 25)
     {
         await repository.UpdateOrder(storeId, orderId, order => { order.Status = DigitalOrderStatus.Revoked; order.TokenHash = null; order.ProtectedToken = null; return true; });
-        return RedirectToAction(nameof(Index), new { storeId });
+        var dashboardUrl = Url.Action(nameof(Index), new
+        {
+            storeId,
+            section = "products",
+            orderSearch,
+            orderProductId,
+            orderStatus,
+            orderPage,
+            orderPageSize
+        });
+        return Redirect($"{dashboardUrl}#orders");
     }
 }

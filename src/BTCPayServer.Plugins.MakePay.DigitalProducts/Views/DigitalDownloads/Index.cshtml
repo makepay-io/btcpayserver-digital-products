@@ -4,12 +4,37 @@
     var licensesActive = string.Equals(Model.ActiveSection, "licenses", StringComparison.OrdinalIgnoreCase);
     ViewData.SetActivePage("DigitalDownloads", "Digital Products", licensesActive ? "License keys" : "Products");
     var publishedProducts = Model.Products.Count(product => product.Active);
-    var paidOrders = Model.Orders.Count(order => order.Status == DigitalOrderStatus.Paid);
-    var deliveries = Model.Orders.Sum(order => order.DownloadCount);
+    var orderPage = Model.OrderPage;
+    var paidOrders = orderPage.PaidCount;
+    var deliveries = orderPage.DeliveryCount;
     var activeLicenses = Model.Licenses.Count(license => license.Status == ManagedLicenseStatus.Active);
     var licenseActivations = Model.Licenses.Sum(license => license.Activations.Count);
     var productsById = Model.Products.ToDictionary(product => product.Id, StringComparer.OrdinalIgnoreCase);
     var productTypes = Enum.GetValues<DigitalProductType>();
+    var orderStatuses = Enum.GetValues<DigitalOrderStatus>();
+    var visibleOrderPages = new SortedSet<int> { 1, orderPage.TotalPages };
+    for (var pageNumber = Math.Max(1, orderPage.Page - 2); pageNumber <= Math.Min(orderPage.TotalPages, orderPage.Page + 2); pageNumber++)
+        visibleOrderPages.Add(pageNumber);
+    Dictionary<string, string> OrderRoute(int pageNumber)
+    {
+        var route = new Dictionary<string, string>
+        {
+            ["storeId"] = Model.StoreId,
+            ["section"] = "products",
+            ["orderPage"] = pageNumber.ToString(),
+            ["orderPageSize"] = orderPage.PageSize.ToString()
+        };
+        if (orderPage.Search.Length > 0) route["orderSearch"] = orderPage.Search;
+        if (orderPage.ProductId.Length > 0) route["orderProductId"] = orderPage.ProductId;
+        if (orderPage.Status is not null) route["orderStatus"] = orderPage.Status.ToString()!;
+        return route;
+    }
+    var clearOrderRoute = new Dictionary<string, string>
+    {
+        ["storeId"] = Model.StoreId,
+        ["section"] = "products",
+        ["orderPageSize"] = orderPage.PageSize.ToString()
+    };
     string TypeIcon(DigitalProductType type) => type switch
     {
         DigitalProductType.FileDownload => "actions-download",
@@ -32,10 +57,12 @@
     .mp-badge{display:inline-flex;align-items:center;gap:.3rem;border-radius:999px;padding:.27rem .55rem;font-size:.68rem;font-weight:750;white-space:nowrap}.mp-badge.is-live,.mp-badge.is-paid,.mp-badge.is-ready{background:rgba(var(--btcpay-success-rgb,18,183,106),.12);color:var(--btcpay-success,#067647)}.mp-badge.is-draft,.mp-badge.is-pending{background:var(--mp-soft);color:var(--mp-muted)}.mp-badge.is-warning,.mp-badge.is-expired{background:rgba(var(--btcpay-warning-rgb,247,144,9),.13);color:var(--btcpay-warning-text,#b54708)}.mp-badge.is-revoked{background:rgba(var(--btcpay-danger-rgb,240,68,56),.11);color:var(--btcpay-danger,#b42318)}
     .mp-table-empty{padding:3.2rem 1rem!important;text-align:center}.mp-table-empty svg{width:34px;height:34px;fill:currentColor;color:var(--mp-muted);margin-bottom:.7rem}.mp-table-empty strong{display:block;margin-bottom:.2rem}.mp-table-empty span{display:block;color:var(--mp-muted);font-size:.8rem;margin-bottom:.9rem}.mp-filter-empty{display:none;padding:2rem;text-align:center;color:var(--mp-muted);font-size:.82rem}.mp-filter-empty.is-visible{display:block}
     .mp-order-id{font-size:.73rem}.mp-order-customer{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mp-attribution{display:flex;align-items:flex-start;gap:.7rem;border:1px solid rgba(var(--btcpay-primary-rgb,21,94,239),.2);border-radius:10px;background:rgba(var(--btcpay-primary-rgb,21,94,239),.055);padding:.85rem 1rem;color:var(--mp-muted);font-size:.78rem;line-height:1.45}.mp-attribution svg{width:18px;height:18px;fill:currentColor;color:var(--btcpay-primary,#155eef);flex:none;margin-top:.1rem}
+    .mp-order-toolbar{display:flex;align-items:center;justify-content:flex-end;gap:.5rem;flex-wrap:wrap}.mp-order-toolbar .mp-search{min-width:260px}.mp-order-toolbar .form-select{min-width:135px}.mp-order-toolbar .mp-order-product{min-width:180px;max-width:240px}.mp-order-toolbar-actions{display:flex;align-items:center;gap:.4rem}.mp-order-footer{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;padding:.8rem 1.1rem;border-top:1px solid var(--mp-border);background:var(--mp-soft)}.mp-order-range{color:var(--mp-muted);font-size:.76rem}.mp-order-range strong{color:var(--mp-text)}.mp-order-footer .pagination{margin:0}.mp-order-footer .page-link{min-width:34px;text-align:center}.mp-order-footer .page-item.disabled .page-link{color:var(--mp-muted)}
     .mp-license-product{min-width:220px}.mp-license-product strong{display:block;font-size:.84rem}.mp-license-product span{display:block;color:var(--mp-muted);font-size:.7rem}.mp-license-key{display:inline-block;max-width:240px;overflow-wrap:anywhere}.mp-issue-grid{display:grid;grid-template-columns:minmax(180px,1fr) minmax(220px,1.2fr) auto;gap:.65rem;align-items:end}.mp-issued-key{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}.mp-issued-key code{font-size:.9rem;overflow-wrap:anywhere}
+    @@media(max-width:1199.98px){.mp-order-toolbar{justify-content:flex-start;width:100%}.mp-order-toolbar .mp-search{flex:1}}
     @@media(max-width:991.98px){.mp-stat-grid{grid-template-columns:1fr 1fr}.mp-panel-head{align-items:stretch;flex-direction:column}.mp-panel-tools{width:100%}.mp-search{flex:1;min-width:180px}}
     @@media(max-width:767.98px){.mp-issue-grid{grid-template-columns:1fr}.mp-issue-grid .btn{width:100%}}
-    @@media(max-width:575.98px){.mp-stat-grid{grid-template-columns:1fr}.mp-admin-actions{width:100%}.mp-admin-actions .btn-primary{flex:1}.mp-panel-tools{align-items:stretch;flex-direction:column}.mp-search{width:100%}.mp-product-cell{min-width:220px}.mp-issued-key{display:block}.mp-issued-key .btn{margin-top:.75rem}}
+    @@media(max-width:575.98px){.mp-stat-grid{grid-template-columns:1fr}.mp-admin-actions{width:100%}.mp-admin-actions .btn-primary{flex:1}.mp-panel-tools{align-items:stretch;flex-direction:column}.mp-search{width:100%}.mp-product-cell{min-width:220px}.mp-issued-key{display:block}.mp-issued-key .btn{margin-top:.75rem}.mp-order-toolbar{align-items:stretch;flex-direction:column}.mp-order-toolbar .mp-search,.mp-order-toolbar .form-select,.mp-order-toolbar .mp-order-product{width:100%;max-width:none}.mp-order-toolbar-actions{width:100%}.mp-order-toolbar-actions .btn{flex:1}.mp-order-footer{align-items:flex-start;flex-direction:column}.mp-order-footer nav{max-width:100%;overflow-x:auto}}
 </style>
 
 <div class="mp-admin-dashboard">
@@ -140,13 +167,26 @@
         <div class="mp-filter-empty" data-product-filter-empty>No products match those filters.</div>
     </section>
 
-    <section class="mp-panel" aria-labelledby="orders-heading">
-        <div class="mp-panel-head"><div><h3 id="orders-heading">Recent orders</h3><p>The latest 100 purchases, payment states, and protected delivery activity.</p></div></div>
+    <section class="mp-panel" id="orders" aria-labelledby="orders-heading">
+        <div class="mp-panel-head">
+            <div><h3 id="orders-heading">Recent orders</h3><p>Search and filter every purchase, payment state, and protected-delivery activity.</p></div>
+            <form method="get" asp-controller="DigitalDownloadsAdmin" asp-action="Index" asp-route-storeId="@Model.StoreId" asp-fragment="orders" class="mp-order-toolbar" role="search">
+                <input type="hidden" name="section" value="products" />
+                <label class="mp-search"><span class="visually-hidden">Search orders</span><svg aria-hidden="true"><use href="/img/icon-sprite.svg#actions-search"></use></svg><input class="form-control form-control-sm" type="search" name="orderSearch" value="@orderPage.Search" maxlength="200" placeholder="Order, invoice, customer, product" /></label>
+                <label><span class="visually-hidden">Filter orders by product</span><select class="form-select form-select-sm mp-order-product" name="orderProductId"><option value="">All products</option>@foreach (var option in orderPage.ProductOptions) { if (option.Id.Equals(orderPage.ProductId, StringComparison.OrdinalIgnoreCase)) { <option value="@option.Id" selected>@option.Name</option> } else { <option value="@option.Id">@option.Name</option> } }</select></label>
+                <label><span class="visually-hidden">Filter orders by status</span><select class="form-select form-select-sm" name="orderStatus"><option value="">All statuses</option>@foreach (var status in orderStatuses) { if (orderPage.Status == status) { <option value="@status" selected>@status</option> } else { <option value="@status">@status</option> } }</select></label>
+                <label><span class="visually-hidden">Orders per page</span><select class="form-select form-select-sm" name="orderPageSize" title="Orders per page">@foreach (var size in orderPage.PageSizeOptions) { if (orderPage.PageSize == size) { <option value="@size" selected>@size per page</option> } else { <option value="@size">@size per page</option> } }</select></label>
+                <span class="mp-order-toolbar-actions"><button class="btn btn-sm btn-primary" type="submit">Apply</button>@if (orderPage.HasFilters) { <a class="btn btn-sm btn-secondary" asp-controller="DigitalDownloadsAdmin" asp-action="Index" asp-all-route-data="@clearOrderRoute" asp-fragment="orders">Clear</a> }</span>
+            </form>
+        </div>
         <div class="table-responsive">
             <table class="table mp-admin-table align-middle">
                 <thead><tr><th>Created</th><th>Order / invoice</th><th>Product</th><th>Customer</th><th>Status</th><th>Downloads</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
                 <tbody>
-                    @if (!Model.Orders.Any()) { <tr><td colspan="7" class="mp-table-empty"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#nav-invoices"></use></svg><strong>No orders yet</strong><span>Paid purchases and delivery activity will appear here.</span></td></tr> }
+                    @if (!Model.Orders.Any())
+                    {
+                        <tr><td colspan="7" class="mp-table-empty"><svg aria-hidden="true"><use href="/img/icon-sprite.svg#nav-invoices"></use></svg><strong>@(orderPage.TotalCount == 0 ? "No orders yet" : "No orders match these filters")</strong><span>@(orderPage.TotalCount == 0 ? "Paid purchases and delivery activity will appear here." : "Try a different search, product, or payment status.")</span>@if (orderPage.TotalCount > 0) { <a class="btn btn-sm btn-secondary" asp-controller="DigitalDownloadsAdmin" asp-action="Index" asp-all-route-data="@clearOrderRoute" asp-fragment="orders">Clear filters</a> }</td></tr>
+                    }
                     @foreach (var order in Model.Orders)
                     {
                         productsById.TryGetValue(order.ProductId, out var currentProduct);
@@ -160,11 +200,30 @@
                             <td><span class="small mp-order-customer" title="@order.BuyerEmail">@order.BuyerEmail</span></td>
                             <td><span class="mp-badge @statusClass">@order.Status</span></td>
                             <td><span class="small">@order.DownloadCount / @order.MaxDownloads</span>@if (order.LastStreamAt is not null) { <div class="small text-muted">Streamed</div> }</td>
-                            <td class="text-end">@if (order.Status == DigitalOrderStatus.Paid) { <form method="post" asp-action="Revoke" asp-route-storeId="@Model.StoreId" asp-route-orderId="@order.Id" data-revoke-form><button class="btn btn-sm btn-outline-danger" type="submit">Revoke</button></form> }</td>
+                            <td class="text-end">@if (order.Status == DigitalOrderStatus.Paid) { <form method="post" asp-action="Revoke" asp-route-storeId="@Model.StoreId" asp-route-orderId="@order.Id" data-revoke-form><input type="hidden" name="orderSearch" value="@orderPage.Search" /><input type="hidden" name="orderProductId" value="@orderPage.ProductId" /><input type="hidden" name="orderStatus" value="@orderPage.Status" /><input type="hidden" name="orderPage" value="@orderPage.Page" /><input type="hidden" name="orderPageSize" value="@orderPage.PageSize" /><button class="btn btn-sm btn-outline-danger" type="submit">Revoke</button></form> }</td>
                         </tr>
                     }
                 </tbody>
             </table>
+        </div>
+        <div class="mp-order-footer">
+            <div class="mp-order-range" aria-live="polite">@if (orderPage.FilteredCount == 0) { <span><strong>0</strong> orders to show</span> } else { <span>Showing <strong>@orderPage.FirstItem&ndash;@orderPage.LastItem</strong> of <strong>@orderPage.FilteredCount</strong> @(orderPage.FilteredCount == 1 ? "order" : "orders")</span> }@if (orderPage.HasFilters) { <span> · @orderPage.TotalCount total</span> }</div>
+            @if (orderPage.TotalPages > 1)
+            {
+                <nav aria-label="Order pages">
+                    <ul class="pagination pagination-sm">
+                        <li class="page-item @(orderPage.Page == 1 ? "disabled" : null)">@if (orderPage.Page == 1) { <span class="page-link" aria-hidden="true">‹</span> } else { <a class="page-link" asp-controller="DigitalDownloadsAdmin" asp-action="Index" asp-all-route-data="@OrderRoute(orderPage.Page - 1)" asp-fragment="orders" aria-label="Previous order page">‹</a> }</li>
+                        @{ var previousOrderPage = 0; }
+                        @foreach (var pageNumber in visibleOrderPages)
+                        {
+                            if (previousOrderPage > 0 && pageNumber - previousOrderPage > 1) { <li class="page-item disabled"><span class="page-link">…</span></li> }
+                            <li class="page-item @(pageNumber == orderPage.Page ? "active" : null)">@if (pageNumber == orderPage.Page) { <span class="page-link" aria-current="page">@pageNumber</span> } else { <a class="page-link" asp-controller="DigitalDownloadsAdmin" asp-action="Index" asp-all-route-data="@OrderRoute(pageNumber)" asp-fragment="orders" aria-label="Order page @pageNumber">@pageNumber</a> }</li>
+                            previousOrderPage = pageNumber;
+                        }
+                        <li class="page-item @(orderPage.Page == orderPage.TotalPages ? "disabled" : null)">@if (orderPage.Page == orderPage.TotalPages) { <span class="page-link" aria-hidden="true">›</span> } else { <a class="page-link" asp-controller="DigitalDownloadsAdmin" asp-action="Index" asp-all-route-data="@OrderRoute(orderPage.Page + 1)" asp-fragment="orders" aria-label="Next order page">›</a> }</li>
+                    </ul>
+                </nav>
+            }
         </div>
     </section>
 

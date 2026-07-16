@@ -2,6 +2,8 @@
 
 A self-hosted BTCPay Server plugin for selling digital media and generated software licenses from one branded storefront. Customers can combine products in one cart, sign in with a one-time email code, pay through BTCPay's JavaScript checkout modal, and return to a private purchase library.
 
+Version 1.6.2 adds server-side order search, product and payment-status filters, selectable page sizes, stable numbered pagination, responsive controls, and full result counts while preserving global dashboard totals and historical deleted-product labels.
+
 Version 1.6.1 redesigns Store settings as a focused BTCPay-native dashboard with accessible section tabs, health summaries, responsive grouped forms, validation-aware navigation, smooth in-page interactions, and persistent save actions.
 
 Version 1.6.0 unifies Products and License Keys in one BTCPay-native administration view, gives the fullscreen editor adaptive BTCPay light/dark styling and polished uploads, adds background cart feedback without page reloads, stabilizes carousel height, and adds a native sidebar icon.

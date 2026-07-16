@@ -397,12 +397,39 @@ public sealed class DigitalOrderCollection
     public Dictionary<string, DigitalOrder> Orders { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
+public sealed class DigitalOrderProductFilterOption
+{
+    public required string Id { get; init; }
+    public required string Name { get; init; }
+}
+
+public sealed class DigitalOrderPageViewModel
+{
+    public required IReadOnlyList<DigitalOrder> Items { get; init; }
+    public required IReadOnlyList<DigitalOrderProductFilterOption> ProductOptions { get; init; }
+    public required IReadOnlyList<int> PageSizeOptions { get; init; }
+    public string Search { get; init; } = "";
+    public string ProductId { get; init; } = "";
+    public DigitalOrderStatus? Status { get; init; }
+    public int Page { get; init; } = 1;
+    public int PageSize { get; init; } = 25;
+    public int TotalPages { get; init; } = 1;
+    public int FilteredCount { get; init; }
+    public int TotalCount { get; init; }
+    public int PaidCount { get; init; }
+    public int DeliveryCount { get; init; }
+    public bool HasFilters => Search.Length > 0 || ProductId.Length > 0 || Status is not null;
+    public int FirstItem => FilteredCount == 0 ? 0 : ((Page - 1) * PageSize) + 1;
+    public int LastItem => Math.Min(Page * PageSize, FilteredCount);
+}
+
 public sealed class DigitalDownloadsDashboardViewModel
 {
     public required string StoreId { get; init; }
     public required DigitalDownloadsSettings Settings { get; init; }
     public required IReadOnlyList<DigitalProduct> Products { get; init; }
-    public required IReadOnlyList<DigitalOrder> Orders { get; init; }
+    public required DigitalOrderPageViewModel OrderPage { get; init; }
+    public IReadOnlyList<DigitalOrder> Orders => OrderPage.Items;
     public required LicenseManagerSettings LicenseSettings { get; init; }
     public required IReadOnlyList<LicenseProduct> LicenseProducts { get; init; }
     public required IReadOnlyList<ManagedLicense> Licenses { get; init; }
