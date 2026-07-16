@@ -1,0 +1,210 @@
+@model DigitalAdminOrderDetailViewModel
+@inject DisplayFormatter DisplayFormatter
+@{
+    ViewData.SetActivePage("DigitalDownloads", "Digital Products", $"Order {Model.OrderId[..Math.Min(8, Model.OrderId.Length)]}");
+    var backRoute = new Dictionary<string, string>
+    {
+        ["storeId"] = Model.StoreId,
+        ["section"] = Model.ReturnSection
+    };
+    if (Model.ReturnSection == "products")
+    {
+        backRoute["orderPage"] = Model.OrderPage.ToString();
+        backRoute["orderPageSize"] = Model.OrderPageSize.ToString();
+        if (Model.OrderSearch.Length > 0) backRoute["orderSearch"] = Model.OrderSearch;
+        if (Model.OrderProductId.Length > 0) backRoute["orderProductId"] = Model.OrderProductId;
+        if (Model.OrderStatus.Length > 0) backRoute["orderStatus"] = Model.OrderStatus;
+    }
+    string StatusClass(string status) => status.ToLowerInvariant() switch
+    {
+        var value when value.Contains("revoked") || value.Contains("expired") || value.Contains("cancelled") => "is-revoked",
+        var value when value.Contains("paid") || value.Contains("fulfilled") || value.Contains("active") => "is-paid",
+        var value when value.Contains("pending") || value.Contains("processing") => "is-pending",
+        _ => "is-revoked"
+    };
+    string DeliveryLabel(DigitalDeliveryMode mode) => mode switch
+    {
+        DigitalDeliveryMode.Download => "Download",
+        DigitalDeliveryMode.Stream => "Stream",
+        _ => "Stream and download"
+    };
+    string FileSize(long? bytes)
+    {
+        if (bytes is null) return "Size not recorded";
+        var value = (double)bytes.Value;
+        var units = new[] { "B", "KB", "MB", "GB", "TB" };
+        var unit = 0;
+        while (value >= 1024 && unit < units.Length - 1) { value /= 1024; unit++; }
+        return $"{value:0.#} {units[unit]}";
+    }
+    var fulfillmentCount = Model.DigitalDeliveries.Count + Model.LicenseDeliveries.Count;
+    var iconSpriteUrl = Url.Content("~/img/icon-sprite.svg");
+}
+
+<style>
+    .mp-order-detail{--mp-border:var(--btcpay-body-border-light,#d0d5dd);--mp-surface:var(--btcpay-bg-tile,#fff);--mp-soft:var(--btcpay-body-bg-light,#f8fafc);--mp-muted:var(--btcpay-body-text-muted,#667085);--mp-text:var(--btcpay-body-text,#101828);color:var(--mp-text)}
+    .mp-order-detail-header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1.15rem}.mp-order-detail-heading{min-width:0}.mp-order-detail-heading h2{margin:0}.mp-order-detail-heading p{margin:.3rem 0 0;color:var(--mp-muted);font-size:.82rem}.mp-order-detail-actions{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}.mp-order-detail-actions .btn{display:inline-flex;align-items:center;gap:.38rem}.mp-order-detail-actions svg{width:16px;height:16px;fill:currentColor}
+    .mp-order-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.8rem;margin-bottom:1rem}.mp-order-stat{display:flex;align-items:center;gap:.8rem;min-height:86px;border:1px solid var(--mp-border);border-radius:11px;background:var(--mp-surface);padding:.95rem}.mp-order-stat-icon{display:grid;place-items:center;width:40px;height:40px;border-radius:9px;background:rgba(var(--btcpay-primary-rgb,81,177,62),.09);color:var(--btcpay-primary,#51b13e);flex:none}.mp-order-stat-icon svg{width:19px;height:19px;fill:currentColor}.mp-order-stat-copy{min-width:0}.mp-order-stat-copy span{display:block;color:var(--mp-muted);font-size:.7rem}.mp-order-stat-copy strong{display:block;margin-top:.08rem;font-size:.98rem;overflow-wrap:anywhere}
+    .mp-order-layout{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(280px,.8fr);gap:1rem;align-items:start}.mp-order-main{display:grid;gap:1rem}.mp-order-side{display:grid;gap:1rem;position:sticky;top:1rem}.mp-order-panel{border:1px solid var(--mp-border);border-radius:12px;background:var(--mp-surface);overflow:hidden}.mp-order-panel-head{padding:1rem 1.1rem;border-bottom:1px solid var(--mp-border)}.mp-order-panel-head h3{margin:0 0 .2rem;font-size:1rem}.mp-order-panel-head p{margin:0;color:var(--mp-muted);font-size:.75rem}.mp-order-table{margin:0}.mp-order-table>:not(caption)>*>*{padding:.82rem .9rem;border-color:var(--mp-border);vertical-align:middle}.mp-order-table thead th{color:var(--mp-muted);font-size:.66rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;white-space:nowrap}.mp-order-product{display:flex;flex-direction:column;min-width:180px}.mp-order-product strong{font-size:.8rem}.mp-order-product span{color:var(--mp-muted);font-size:.7rem}.mp-order-total td{background:var(--mp-soft);font-weight:700}
+    .mp-order-badge{display:inline-flex;align-items:center;border-radius:999px;padding:.28rem .58rem;font-size:.68rem;font-weight:750;white-space:nowrap}.mp-order-badge.is-paid{background:rgba(var(--btcpay-success-rgb,81,177,62),.14);color:var(--btcpay-success,#51b13e)}.mp-order-badge.is-pending{background:rgba(var(--btcpay-warning-rgb,255,178,43),.14);color:var(--btcpay-warning-text,#9a5c00)}.mp-order-badge.is-expired,.mp-order-badge.is-revoked{background:rgba(var(--btcpay-danger-rgb,220,53,69),.13);color:var(--btcpay-danger,#dc3545)}
+    .mp-order-overview{display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:1px solid var(--mp-border)}.mp-order-field{min-width:0;padding:.82rem 1rem;border-bottom:1px solid var(--mp-border)}.mp-order-field:nth-child(odd){border-right:1px solid var(--mp-border)}.mp-order-field dt{margin:0 0 .22rem;color:var(--mp-muted);font-size:.67rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}.mp-order-field dd{margin:0;font-size:.78rem;overflow-wrap:anywhere}.mp-order-field code{font-size:.72rem}.mp-order-state-note{display:flex;align-items:flex-start;gap:.55rem;margin:.85rem;border:1px solid rgba(var(--btcpay-primary-rgb,81,177,62),.2);border-radius:9px;background:rgba(var(--btcpay-primary-rgb,81,177,62),.06);padding:.75rem;color:var(--mp-muted);font-size:.72rem}.mp-order-state-note svg{width:16px;height:16px;fill:currentColor;color:var(--btcpay-primary,#51b13e);flex:none}
+    .mp-delivery-list{display:grid;gap:.75rem;padding:.9rem}.mp-delivery-card{border:1px solid var(--mp-border);border-radius:9px;background:var(--mp-soft);padding:.85rem}.mp-delivery-head{display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem}.mp-delivery-head h4{margin:0;font-size:.84rem}.mp-delivery-id{display:block;margin:.15rem 0 0;color:var(--mp-muted);font-size:.68rem;overflow-wrap:anywhere}.mp-delivery-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.65rem;margin-top:.75rem}.mp-delivery-meta div{min-width:0}.mp-delivery-meta span{display:block;color:var(--mp-muted);font-size:.65rem}.mp-delivery-meta strong{display:block;margin-top:.1rem;font-size:.74rem;overflow-wrap:anywhere}.mp-delivery-actions{display:flex;align-items:center;justify-content:flex-end;margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--mp-border)}
+    .mp-order-empty{padding:1.1rem;color:var(--mp-muted);font-size:.76rem}.mp-order-detail code{color:inherit}.mp-order-detail .text-break{overflow-wrap:anywhere}.mp-order-detail [data-revoke-form] button:disabled{opacity:.65}
+    @@media(max-width:991.98px){.mp-order-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.mp-order-layout{grid-template-columns:1fr}.mp-order-side{position:static}.mp-delivery-meta{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @@media(max-width:575.98px){.mp-order-detail-header{display:block}.mp-order-detail-actions{display:grid;grid-template-columns:1fr;margin-top:.9rem}.mp-order-detail-actions .btn{justify-content:center}.mp-order-stats{grid-template-columns:1fr}.mp-order-overview{grid-template-columns:1fr}.mp-order-field:nth-child(odd){border-right:0}.mp-delivery-meta{grid-template-columns:1fr}.mp-delivery-head{display:block}.mp-delivery-head .mp-order-badge{margin-top:.5rem}}
+</style>
+
+<div class="mp-order-detail">
+    <header class="mp-order-detail-header">
+        <div class="mp-order-detail-heading">
+            <h2>Order details</h2>
+            <p>Payment, customer, purchased items, and protected fulfillment for <code>@Model.OrderId</code>.</p>
+        </div>
+        <div class="mp-order-detail-actions">
+            <a class="btn btn-secondary" asp-action="Index" asp-all-route-data="@backRoute" asp-fragment="@(Model.ReturnSection == "products" ? "orders" : null)"><svg aria-hidden="true"><use href="@iconSpriteUrl#back"></use></svg>Back</a>
+            @if (!string.IsNullOrWhiteSpace(Model.InvoiceId))
+            {
+                <a class="btn btn-secondary" asp-controller="UIInvoice" asp-action="Invoice" asp-route-invoiceId="@Model.InvoiceId"><svg aria-hidden="true"><use href="@iconSpriteUrl#nav-invoices"></use></svg>Open invoice</a>
+            }
+        </div>
+    </header>
+
+    <partial name="_StatusMessage" />
+
+    <section class="mp-order-stats" aria-label="Order summary">
+        <div class="mp-order-stat"><span class="mp-order-stat-icon"><svg aria-hidden="true"><use href="@iconSpriteUrl#checkout-complete"></use></svg></span><div class="mp-order-stat-copy"><span>Status</span><strong><span class="mp-order-badge @StatusClass(Model.StatusLabel)">@Model.StatusLabel</span></strong></div></div>
+        <div class="mp-order-stat"><span class="mp-order-stat-icon"><svg aria-hidden="true"><use href="@iconSpriteUrl#payment-receive"></use></svg></span><div class="mp-order-stat-copy"><span>Total</span><strong>@(Model.Total is { } total ? DisplayFormatter.Currency(total, Model.Currency) : "Not recorded")</strong></div></div>
+        <div class="mp-order-stat"><span class="mp-order-stat-icon"><svg aria-hidden="true"><use href="@iconSpriteUrl#nav-products"></use></svg></span><div class="mp-order-stat-copy"><span>Purchased items</span><strong>@Model.Lines.Sum(line => line.Quantity)</strong></div></div>
+        <div class="mp-order-stat"><span class="mp-order-stat-icon"><svg aria-hidden="true"><use href="@iconSpriteUrl#actions-download"></use></svg></span><div class="mp-order-stat-copy"><span>Fulfillments</span><strong>@fulfillmentCount</strong></div></div>
+    </section>
+
+    <div class="mp-order-layout">
+        <main class="mp-order-main">
+            <section class="mp-order-panel" aria-labelledby="items-heading">
+                <header class="mp-order-panel-head"><h3 id="items-heading">Purchased items</h3><p>Snapshot names and prices are retained from the checkout when available.</p></header>
+                @if (Model.Lines.Count == 0)
+                {
+                    <div class="mp-order-empty">No line-item information was recorded for this legacy order.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table mp-order-table align-middle">
+                            <thead><tr><th>Product</th><th>Type</th><th>Quantity</th><th>Unit price</th><th class="text-end">Total</th></tr></thead>
+                            <tbody>
+                            @foreach (var line in Model.Lines)
+                            {
+                                var kindLabel = line.Kind == DigitalProductKind.License ? "Software license" : line.ProductType is { } productType ? DigitalStorefrontBuilder.ProductTypeLabel(productType) : "Digital product";
+                                var deliveryLabel = line.Kind == DigitalProductKind.License ? "License key" : line.DeliveryMode is { } deliveryMode ? DeliveryLabel(deliveryMode) : null;
+                                <tr>
+                                    <td><span class="mp-order-product"><strong>@line.Name</strong><span>@line.ProductId</span></span></td>
+                                    <td><span class="small">@kindLabel</span>@if (deliveryLabel is not null) { <div class="small text-muted">@deliveryLabel</div> }</td>
+                                    <td>@line.Quantity</td>
+                                    <td class="text-nowrap">@(line.UnitPrice is { } unitPrice ? DisplayFormatter.Currency(unitPrice, Model.Currency) : "—")</td>
+                                    <td class="text-end text-nowrap"><strong>@(line.Total is { } lineTotal ? DisplayFormatter.Currency(lineTotal, Model.Currency) : "—")</strong></td>
+                                </tr>
+                            }
+                            @if (Model.Total is { } orderTotal)
+                            {
+                                <tr class="mp-order-total"><td colspan="4">Order total</td><td class="text-end text-nowrap">@DisplayFormatter.Currency(orderTotal, Model.Currency)</td></tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+
+            @if (Model.DigitalDeliveries.Count > 0)
+            {
+                <section class="mp-order-panel" aria-labelledby="delivery-heading">
+                    <header class="mp-order-panel-head"><h3 id="delivery-heading">Protected delivery</h3><p>Access state and usage for every file, reader, audio, video, or art fulfillment.</p></header>
+                    <div class="mp-delivery-list">
+                    @foreach (var delivery in Model.DigitalDeliveries)
+                    {
+                        <article class="mp-delivery-card">
+                            <div class="mp-delivery-head"><div><h4>@delivery.ProductName</h4><code class="mp-delivery-id">@delivery.OrderId</code></div><span class="mp-order-badge @StatusClass(delivery.Status.ToString())">@delivery.Status</span></div>
+                            <div class="mp-delivery-meta">
+                                <div><span>Format</span><strong>@DigitalStorefrontBuilder.ProductTypeLabel(delivery.ProductType)</strong></div>
+                                <div><span>Delivery</span><strong>@DeliveryLabel(delivery.DeliveryMode)</strong></div>
+                                <div><span>Protected file</span><strong>@delivery.DownloadFileName · @FileSize(delivery.FileSize)</strong></div>
+                                <div><span>Created</span><strong>@delivery.CreatedAt.ToBrowserDate()</strong></div>
+                                <div><span>Paid</span><strong>@(delivery.PaidAt is { } deliveryPaid ? deliveryPaid.ToBrowserDate() : "Not recorded")</strong></div>
+                                <div><span>Downloads</span><strong>@delivery.DownloadCount / @delivery.MaxDownloads</strong></div>
+                                <div><span>Last download</span><strong>@(delivery.LastDownloadAt is { } downloaded ? downloaded.ToBrowserDate() : "Never")</strong></div>
+                                <div><span>Last stream</span><strong>@(delivery.LastStreamAt is { } streamed ? streamed.ToBrowserDate() : "Never")</strong></div>
+                                <div><span>Access expires</span><strong>@(delivery.ExpiresAt is { } expires ? expires.ToBrowserDate() : "No expiry recorded")</strong></div>
+                                <div><span>IP lock</span><strong>@(delivery.IsIpLocked ? "Established" : "Not established")</strong></div>
+                                <div><span>Delivery email</span><strong>@(delivery.DeliveryEmailQueued ? "Queued" : "Not queued")</strong></div>
+                            </div>
+                            @if (delivery.Status == DigitalOrderStatus.Paid)
+                            {
+                                <div class="mp-delivery-actions">
+                                    <form method="post" asp-action="Revoke" asp-route-storeId="@Model.StoreId" asp-route-orderId="@delivery.OrderId" data-revoke-form>
+                                        <input type="hidden" name="returnToDetail" value="true" />
+                                        <input type="hidden" name="detailOrderId" value="@Model.OrderId" />
+                                        <input type="hidden" name="section" value="@Model.ReturnSection" />
+                                        <input type="hidden" name="orderSearch" value="@Model.OrderSearch" />
+                                        <input type="hidden" name="orderProductId" value="@Model.OrderProductId" />
+                                        <input type="hidden" name="orderStatus" value="@Model.OrderStatus" />
+                                        <input type="hidden" name="orderPage" value="@Model.OrderPage" />
+                                        <input type="hidden" name="orderPageSize" value="@Model.OrderPageSize" />
+                                        <button class="btn btn-sm btn-outline-danger" type="submit">Revoke protected access</button>
+                                    </form>
+                                </div>
+                            }
+                        </article>
+                    }
+                    </div>
+                </section>
+            }
+
+            @if (Model.LicenseDeliveries.Count > 0)
+            {
+                <section class="mp-order-panel" aria-labelledby="license-delivery-heading">
+                    <header class="mp-order-panel-head"><h3 id="license-delivery-heading">License fulfillment</h3><p>Issued-license state and activation usage. License keys and security hashes are never displayed here.</p></header>
+                    <div class="mp-delivery-list">
+                    @foreach (var license in Model.LicenseDeliveries)
+                    {
+                        var licenseStatus = license.LicenseStatus?.ToString() ?? license.OrderStatus?.ToString() ?? "Issued";
+                        <article class="mp-delivery-card">
+                            <div class="mp-delivery-head"><div><h4>@license.ProductName</h4><code class="mp-delivery-id">@license.OrderId</code></div><span class="mp-order-badge @StatusClass(licenseStatus)">@licenseStatus</span></div>
+                            <div class="mp-delivery-meta">
+                                <div><span>License reference</span><strong>@(license.LicenseId ?? "Not issued")</strong></div>
+                                <div><span>Order state</span><strong>@(license.OrderStatus?.ToString() ?? "Not recorded")</strong></div>
+                                <div><span>Activations</span><strong>@license.Activations / @license.MaxActivations</strong></div>
+                                <div><span>Ordered</span><strong>@license.CreatedAt.ToBrowserDate()</strong></div>
+                                <div><span>Issued</span><strong>@(license.IssuedAt is { } issued ? issued.ToBrowserDate() : "Not issued")</strong></div>
+                                <div><span>Expires</span><strong>@(license.ExpiresAt is { } expires ? expires.ToBrowserDate() : "Lifetime / not recorded")</strong></div>
+                            </div>
+                        </article>
+                    }
+                    </div>
+                </section>
+            }
+        </main>
+
+        <aside class="mp-order-side">
+            <section class="mp-order-panel" aria-labelledby="overview-heading">
+                <header class="mp-order-panel-head"><h3 id="overview-heading">Order overview</h3><p>References and timestamps from BTCPay checkout and fulfillment.</p></header>
+                <dl class="mp-order-overview">
+                    <div class="mp-order-field"><dt>Customer</dt><dd>@(string.IsNullOrWhiteSpace(Model.BuyerEmail) ? "Not recorded" : Model.BuyerEmail)</dd></div>
+                    <div class="mp-order-field"><dt>Created</dt><dd>@Model.CreatedAt.ToBrowserDate()</dd></div>
+                    <div class="mp-order-field"><dt>Checkout</dt><dd>@if (Model.CheckoutId is not null) { <code>@Model.CheckoutId</code> } else { <span>Legacy order</span> }</dd></div>
+                    <div class="mp-order-field"><dt>Invoice</dt><dd>@if (Model.InvoiceId is not null) { <a asp-controller="UIInvoice" asp-action="Invoice" asp-route-invoiceId="@Model.InvoiceId"><code>@Model.InvoiceId</code></a> } else { <span>Not recorded</span> }</dd></div>
+                    <div class="mp-order-field"><dt>Payment state</dt><dd>@(Model.CheckoutStatus?.ToString() ?? "Not recorded")</dd></div>
+                    <div class="mp-order-field"><dt>Paid</dt><dd>@(Model.PaidAt is { } paid ? paid.ToBrowserDate() : "Not recorded")</dd></div>
+                    <div class="mp-order-field"><dt>Reservation expiry</dt><dd>@(Model.ReservationExpiresAt is { } reservedUntil ? reservedUntil.ToBrowserDate() : "Not recorded")</dd></div>
+                    <div class="mp-order-field"><dt>Purchase email</dt><dd>@(Model.DeliveryEmailQueued ? "Queued" : "Not queued")</dd></div>
+                </dl>
+                <div class="mp-order-state-note"><svg aria-hidden="true"><use href="@iconSpriteUrl#lock"></use></svg><span>Only operational references are shown. Access tokens, license keys, storage locations, request signatures, and IP hashes remain protected.</span></div>
+            </section>
+        </aside>
+    </div>
+</div>
+
+<script>
+document.querySelectorAll('[data-revoke-form]').forEach(form => form.addEventListener('submit', event => {
+    if (!window.confirm('Revoke this customer’s protected access? This takes effect immediately.')) event.preventDefault();
+    else form.querySelector('button').disabled = true;
+}));
+</script>

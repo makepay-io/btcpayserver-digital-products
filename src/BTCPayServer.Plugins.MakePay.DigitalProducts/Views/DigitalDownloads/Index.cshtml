@@ -29,6 +29,12 @@
         if (orderPage.Status is not null) route["orderStatus"] = orderPage.Status.ToString()!;
         return route;
     }
+    Dictionary<string, string> OrderDetailRoute(string orderId)
+    {
+        var route = OrderRoute(orderPage.Page);
+        route["orderId"] = orderId;
+        return route;
+    }
     var clearOrderRoute = new Dictionary<string, string>
     {
         ["storeId"] = Model.StoreId,
@@ -195,12 +201,12 @@
                         var statusClass = order.Status switch { DigitalOrderStatus.Paid => "is-paid", DigitalOrderStatus.Pending => "is-pending", DigitalOrderStatus.Expired => "is-expired", _ => "is-revoked" };
                         <tr>
                             <td class="text-nowrap small">@order.CreatedAt.ToBrowserDate()</td>
-                            <td><code class="mp-order-id">@shortId</code>@if (order.InvoiceId is not null) { <div><a class="small" asp-controller="UIInvoice" asp-action="Invoice" asp-route-invoiceId="@order.InvoiceId">Open invoice</a></div> }</td>
+                            <td><a asp-action="OrderDetail" asp-all-route-data="@OrderDetailRoute(order.Id)" aria-label="View order @shortId"><code class="mp-order-id">@shortId</code></a>@if (order.InvoiceId is not null) { <div><a class="small" asp-controller="UIInvoice" asp-action="Invoice" asp-route-invoiceId="@order.InvoiceId">Open invoice</a></div> }</td>
                             <td><strong class="small">@productName</strong></td>
                             <td><span class="small mp-order-customer" title="@order.BuyerEmail">@order.BuyerEmail</span></td>
                             <td><span class="mp-badge @statusClass">@order.Status</span></td>
                             <td><span class="small">@order.DownloadCount / @order.MaxDownloads</span>@if (order.LastStreamAt is not null) { <div class="small text-muted">Streamed</div> }</td>
-                            <td class="text-end">@if (order.Status == DigitalOrderStatus.Paid) { <form method="post" asp-action="Revoke" asp-route-storeId="@Model.StoreId" asp-route-orderId="@order.Id" data-revoke-form><input type="hidden" name="orderSearch" value="@orderPage.Search" /><input type="hidden" name="orderProductId" value="@orderPage.ProductId" /><input type="hidden" name="orderStatus" value="@orderPage.Status" /><input type="hidden" name="orderPage" value="@orderPage.Page" /><input type="hidden" name="orderPageSize" value="@orderPage.PageSize" /><button class="btn btn-sm btn-outline-danger" type="submit">Revoke</button></form> }</td>
+                            <td class="text-end"><div class="d-inline-flex align-items-center justify-content-end gap-2"><a class="btn btn-sm btn-secondary" asp-action="OrderDetail" asp-all-route-data="@OrderDetailRoute(order.Id)">View</a>@if (order.Status == DigitalOrderStatus.Paid) { <form method="post" asp-action="Revoke" asp-route-storeId="@Model.StoreId" asp-route-orderId="@order.Id" data-revoke-form><input type="hidden" name="orderSearch" value="@orderPage.Search" /><input type="hidden" name="orderProductId" value="@orderPage.ProductId" /><input type="hidden" name="orderStatus" value="@orderPage.Status" /><input type="hidden" name="orderPage" value="@orderPage.Page" /><input type="hidden" name="orderPageSize" value="@orderPage.PageSize" /><button class="btn btn-sm btn-outline-danger" type="submit">Revoke</button></form> }</div></td>
                         </tr>
                     }
                 </tbody>
@@ -288,7 +294,7 @@
                             var statusClass = license.Status switch { ManagedLicenseStatus.Active => "is-live", ManagedLicenseStatus.Expired => "is-expired", ManagedLicenseStatus.Suspended => "is-warning", _ => "is-revoked" };
                             <tr>
                                 <td class="small text-nowrap">@license.IssuedAt.ToBrowserDate()</td>
-                                <td><span class="small mp-order-customer" title="@license.CustomerEmail">@license.CustomerEmail</span><div class="small text-muted"><code>@license.Id[..Math.Min(10, license.Id.Length)]</code></div></td>
+                                <td><span class="small mp-order-customer" title="@license.CustomerEmail">@license.CustomerEmail</span><div class="small text-muted"><code>@license.Id[..Math.Min(10, license.Id.Length)]</code>@if (!string.IsNullOrWhiteSpace(license.OrderId)) { <text> · </text><a asp-action="OrderDetail" asp-route-storeId="@Model.StoreId" asp-route-orderId="@license.OrderId" asp-route-section="licenses">View order</a> }</div></td>
                                 <td><strong class="small">@(licenseProduct?.Name ?? "Deleted product")</strong></td>
                                 <td><span class="mp-badge @statusClass">@license.Status</span></td>
                                 <td><span class="small">@license.Activations.Count / @license.MaxActivations</span></td>

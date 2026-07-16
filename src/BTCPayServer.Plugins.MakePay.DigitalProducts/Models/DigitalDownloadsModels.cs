@@ -423,6 +423,84 @@ public sealed class DigitalOrderPageViewModel
     public int LastItem => Math.Min(Page * PageSize, FilteredCount);
 }
 
+/// <summary>
+/// Admin-only, deliberately sanitized projection of a purchase. Raw delivery tokens,
+/// storage locations, license keys, and IP hashes never enter the Razor model.
+/// </summary>
+public sealed class DigitalAdminOrderDetailViewModel
+{
+    public required string StoreId { get; init; }
+    public required string OrderId { get; init; }
+    public required string BuyerEmail { get; init; }
+    public required string StatusLabel { get; init; }
+    public string? CheckoutId { get; init; }
+    public string? InvoiceId { get; init; }
+    public DigitalCheckoutStatus? CheckoutStatus { get; init; }
+    public decimal? Total { get; init; }
+    public string Currency { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; }
+    public DateTimeOffset? PaidAt { get; init; }
+    public DateTimeOffset? ReservationExpiresAt { get; init; }
+    public bool DeliveryEmailQueued { get; init; }
+    public required IReadOnlyList<DigitalAdminOrderLineViewModel> Lines { get; init; }
+    public required IReadOnlyList<DigitalAdminDeliveryViewModel> DigitalDeliveries { get; init; }
+    public required IReadOnlyList<DigitalAdminLicenseDeliveryViewModel> LicenseDeliveries { get; init; }
+    public string ReturnSection { get; init; } = "products";
+    public string OrderSearch { get; init; } = "";
+    public string OrderProductId { get; init; } = "";
+    public string OrderStatus { get; init; } = "";
+    public int OrderPage { get; init; } = 1;
+    public int OrderPageSize { get; init; } = 25;
+}
+
+public sealed class DigitalAdminOrderLineViewModel
+{
+    public required string ProductId { get; init; }
+    public required string Name { get; init; }
+    public DigitalProductKind Kind { get; init; }
+    public DigitalProductType? ProductType { get; init; }
+    public DigitalDeliveryMode? DeliveryMode { get; init; }
+    public int Quantity { get; init; }
+    public decimal? UnitPrice { get; init; }
+    public decimal? Total { get; init; }
+}
+
+public sealed class DigitalAdminDeliveryViewModel
+{
+    public required string OrderId { get; init; }
+    public required string ProductId { get; init; }
+    public required string ProductName { get; init; }
+    public DigitalProductType ProductType { get; init; }
+    public DigitalDeliveryMode DeliveryMode { get; init; }
+    public required string DownloadFileName { get; init; }
+    public long? FileSize { get; init; }
+    public DigitalOrderStatus Status { get; init; }
+    public DateTimeOffset CreatedAt { get; init; }
+    public DateTimeOffset? PaidAt { get; init; }
+    public DateTimeOffset? ExpiresAt { get; init; }
+    public int DownloadCount { get; init; }
+    public int MaxDownloads { get; init; }
+    public DateTimeOffset? LastDownloadAt { get; init; }
+    public DateTimeOffset? LastStreamAt { get; init; }
+    public bool IsIpLocked { get; init; }
+    public bool DeliveryEmailQueued { get; init; }
+}
+
+public sealed class DigitalAdminLicenseDeliveryViewModel
+{
+    public required string OrderId { get; init; }
+    public required string ProductId { get; init; }
+    public required string ProductName { get; init; }
+    public string? LicenseId { get; init; }
+    public LicenseOrderStatus? OrderStatus { get; init; }
+    public ManagedLicenseStatus? LicenseStatus { get; init; }
+    public DateTimeOffset CreatedAt { get; init; }
+    public DateTimeOffset? IssuedAt { get; init; }
+    public DateTimeOffset? ExpiresAt { get; init; }
+    public int Activations { get; init; }
+    public int MaxActivations { get; init; }
+}
+
 public sealed class DigitalDownloadsDashboardViewModel
 {
     public required string StoreId { get; init; }
