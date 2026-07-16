@@ -449,6 +449,48 @@ public sealed class DigitalDownloadsAdminController(
         ViewData.SetActivePage("DigitalDownloadsSettings", "Digital Products", "Storefront & delivery settings");
     }
 
+    [HttpGet("orders/{orderId}")]
+    public async Task<IActionResult> OrderDetail(
+        string storeId,
+        string orderId,
+        string? section = null,
+        string? orderSearch = null,
+        string? orderProductId = null,
+        string? orderStatus = null,
+        int orderPage = 1,
+        int orderPageSize = 25)
+    {
+        if (await stores.FindStore(storeId) is null) return NotFound();
+
+        var digitalOrder = await repository.GetOrder(storeId, orderId);
+        var licenseOrder = digitalOrder is null ? await licenses.GetOrder(storeId, orderId) : null;
+        var checkoutId = digitalOrder?.CheckoutId ?? licenseOrder?.CheckoutId;
+        var checkout = !string.IsNullOrWhiteSpace(checkoutId)
+            ? await repository.GetCheckout(storeId, checkoutId)
+            : await repository.GetCheckout(storeId, orderId);
+        if (digitalOrder is null && licenseOrder is null && checkout is null) return NotFound();
+
+        var model = DigitalOrderDetailBuilder.Build(
+            storeId,
+            orderId,
+            digitalOrder,
+            licenseOrder,
+            checkout,
+            await repository.GetOrders(storeId),
+            await repository.GetProducts(storeId),
+            await licenses.GetOrders(storeId),
+            await licenses.GetProducts(storeId),
+            await licenses.GetLicenses(storeId),
+            section,
+            orderSearch,
+            orderProductId,
+            orderStatus,
+            orderPage,
+            orderPageSize);
+        ViewData.SetActivePage("DigitalDownloads", "Digital Products", $"Order {ShortId(orderId)}");
+        return View("~/Views/DigitalDownloads/OrderDetail.cshtml", model);
+    }
+
     [HttpPost("orders/{orderId}/revoke")]
     public async Task<IActionResult> Revoke(
         string storeId,
@@ -457,9 +499,39 @@ public sealed class DigitalDownloadsAdminController(
         string? orderProductId = null,
         string? orderStatus = null,
         int orderPage = 1,
-        int orderPageSize = 25)
+        int orderPageSize = 25,
+        bool returnToDetail = false,
+        string? detailOrderId = null,
+        string? section = null)
     {
-        await repository.UpdateOrder(storeId, orderId, order => { order.Status = DigitalOrderStatus.Revoked; order.TokenHash = null; order.ProtectedToken = null; return true; });
+        if (await stores.FindStore(storeId) is null) return NotFound();
+        var revoked = await repository.UpdateOrder(storeId, orderId, order =>
+        {
+            order.Status = DigitalOrderStatus.Revoked;
+            order.TokenHash = null;
+            order.ProtectedToken = null;
+            return true;
+        });
+        if (revoked is null) return NotFound();
+        TempData.SetStatusMessageModel(new StatusMessageModel
+        {
+            Severity = StatusMessageModel.StatusSeverity.Success,
+            Message = "Protected access revoked."
+        });
+        if (returnToDetail)
+        {
+            return RedirectToAction(nameof(OrderDetail), new
+            {
+                storeId,
+                orderId = string.IsNullOrWhiteSpace(detailOrderId) ? orderId : detailOrderId,
+                section = string.Equals(section, "licenses", StringComparison.OrdinalIgnoreCase) ? "licenses" : "products",
+                orderSearch,
+                orderProductId,
+                orderStatus,
+                orderPage,
+                orderPageSize
+            });
+        }
         var dashboardUrl = Url.Action(nameof(Index), new
         {
             storeId,
@@ -472,4 +544,6 @@ public sealed class DigitalDownloadsAdminController(
         });
         return Redirect($"{dashboardUrl}#orders");
     }
+
+    private static string ShortId(string value) => value[..Math.Min(8, value.Length)];
 }
