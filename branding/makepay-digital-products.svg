@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">MakePay Digital Products</title>
+  <desc id="description">A protected digital document with a download arrow.</desc>
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="#0b1118"/>
+  <rect x="24" y="24" width="464" height="464" rx="104" fill="none" stroke="#26313d" stroke-width="8"/>
+  <path d="M154 104h132l72 72v202c0 17.7-14.3 32-32 32H154c-17.7 0-32-14.3-32-32V136c0-17.7 14.3-32 32-32Z" fill="#111a24" stroke="#fff" stroke-width="26" stroke-linejoin="round"/>
+  <path d="M286 106v70h70" fill="none" stroke="#fff" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M240 198v110m-48-45 48 48 48-48" fill="none" stroke="#51b13e" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M184 354h112" fill="none" stroke="#fff" stroke-width="26" stroke-linecap="round"/>
+</svg>
