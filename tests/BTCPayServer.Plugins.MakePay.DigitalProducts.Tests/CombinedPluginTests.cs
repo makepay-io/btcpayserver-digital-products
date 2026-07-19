@@ -10,7 +10,7 @@ public sealed class CombinedPluginTests
     [Fact]
     public void Release_version_metadata_is_synchronized()
     {
-        const string expected = "1.6.3";
+        const string expected = "1.6.4";
         var project = File.ReadAllText(CustomDomainGuideTests.RepositoryFile(
             "src", "BTCPayServer.Plugins.MakePay.DigitalProducts",
             "BTCPayServer.Plugins.MakePay.DigitalProducts.csproj"));
